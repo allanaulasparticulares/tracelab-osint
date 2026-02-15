@@ -15,20 +15,13 @@ export async function POST(req: NextRequest) {
   const newToken = await touchSession(session, SESSION_MAX_AGE_SECONDS);
   if (!newToken) {
     const expiredResponse = NextResponse.json({ success: false, error: 'Sessão expirada.' }, { status: 401 });
-    expiredResponse.cookies.set(SESSION_COOKIE, '', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 0,
-    });
     return expiredResponse;
   }
 
   const response = NextResponse.json({ success: true });
   response.cookies.set(SESSION_COOKIE, newToken, {
     httpOnly: true,
-    secure: false, // process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
     maxAge: SESSION_MAX_AGE_SECONDS,

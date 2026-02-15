@@ -306,8 +306,10 @@ export default function LabPage() {
               {tools.filter(t => t.category === cat).map(tool => (
                 <button
                   key={tool.id}
+                  type="button"
                   className={`tool-btn ${activeTool === tool.id ? 'active' : ''}`}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setActiveTool(tool.id);
                     setIsSidebarOpen(false);
                     clearToolResults();

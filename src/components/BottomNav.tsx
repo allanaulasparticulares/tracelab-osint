@@ -8,7 +8,7 @@ export default function BottomNav() {
 
     const isActive = (path: string) => pathname === path || (pathname?.startsWith(path) && path !== '/');
 
-    if (pathname === '/login' || pathname === '/anonymous' || pathname === '/' || pathname?.startsWith('/verify')) return null;
+    if (pathname === '/login' || pathname === '/anonymous' || pathname === '/' || pathname === '/lab' || pathname?.startsWith('/verify')) return null;
 
     const navItems = [
         {
@@ -55,8 +55,8 @@ export default function BottomNav() {
     ];
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden safe-area-bottom" style={{ 
-            background: 'rgba(11, 15, 26, 0.95)', 
+        <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden safe-area-bottom" style={{
+            background: 'rgba(11, 15, 26, 0.95)',
             backdropFilter: 'blur(12px)',
             borderTop: '1px solid var(--border-primary)',
             boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.3)'
@@ -71,10 +71,10 @@ export default function BottomNav() {
                             : item.className || ''
                             }`}
                         style={{
-                            color: isActive(item.href) && item.href !== '/api/auth/logout' 
-                                ? 'var(--accent-primary)' 
-                                : item.href === '/api/auth/logout' 
-                                    ? '#ff5dc3' 
+                            color: isActive(item.href) && item.href !== '/api/auth/logout'
+                                ? 'var(--accent-primary)'
+                                : item.href === '/api/auth/logout'
+                                    ? '#ff5dc3'
                                     : 'var(--text-muted)',
                             gap: '0.25rem',
                             fontSize: '0.7rem',
@@ -97,8 +97,8 @@ export default function BottomNav() {
                                 boxShadow: '0 0 8px var(--accent-primary)'
                             }} />
                         )}
-                        <span style={{ 
-                            transform: isActive(item.href) ? 'scale(1.1)' : 'scale(1)', 
+                        <span style={{
+                            transform: isActive(item.href) ? 'scale(1.1)' : 'scale(1)',
                             transition: 'transform 0.2s',
                             filter: isActive(item.href) && item.href !== '/api/auth/logout' ? 'drop-shadow(0 0 4px var(--accent-primary))' : 'none'
                         }}>

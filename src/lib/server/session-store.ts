@@ -11,6 +11,10 @@ export type SessionRecord = {
 // Segredo para assinar o cookie. Usamos a SERVICE_KEY pois ela é segura e estável no backend.
 const SECRET_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'default-insecure-secret-dev-only';
 
+if (SECRET_KEY === 'default-insecure-secret-dev-only' && process.env.NODE_ENV === 'production') {
+  console.warn('⚠️ CRITICAL: Using insecure session secret in production. Please set SUPABASE_SERVICE_ROLE_KEY.');
+}
+
 export async function createSession(email: string, ttlSeconds: number): Promise<string> {
   const now = new Date();
   const expiresAt = new Date(now.getTime() + ttlSeconds * 1000);

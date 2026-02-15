@@ -100,14 +100,14 @@ export async function POST(req: NextRequest) {
     const response = NextResponse.json({ success: true, displayName: persistedDisplayName });
     response.cookies.set('tracelab_session', sessionId, {
       httpOnly: true,
-      secure: false, // process.env.NODE_ENV === 'production', // FIXME: Revertir para production quando HTTPS estiver configurado
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
       maxAge: SESSION_MAX_AGE_SECONDS,
     });
     response.cookies.set('tracelab_user_name', persistedDisplayName, {
       httpOnly: false,
-      secure: false, // process.env.NODE_ENV === 'production',
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
       maxAge: 60 * 60 * 24 * 30,
