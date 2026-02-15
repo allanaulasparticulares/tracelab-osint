@@ -1,0 +1,203 @@
+/**
+ * Prisma Schema - TraceLab OSINT
+ * 
+ * Sistema de autenticação híbrido:
+ * - Login identificado (usuário com conta)
+ * - Login anônimo (sessão temporária)
+ * 
+ * Filosofia: Autenticação ≠ Vigilância
+ */
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USUÁRIOS AUTENTICADOS
+// ============================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  
+  // Relações
+  sessions      Session[]
+  activityLogs  ActivityLog[]
+  
+  @@index([email])
+  @@map("users")
+}
+
+// ============================================
+// SESSÕES ANÔNIMAS
+// ============================================
+
+model AnonymousSession {
+  id            String    @id @default(uuid())
+  token         String    @unique
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime  // 24 horas após criação
+  requestCount  Int       @default(0)
+  lastActivityAt DateTime @default(now())
+  
+  // Hash temporário de IP para rate limiting (não armazenado permanentemente)
+  ipHash        String?
+  
+  // Logs agregados (sem detalhes)
+  activityLogs  AnonymousActivityLog[]
+  
+  @@index([token])
+  @@index([expiresAt])
+  @@map("anonymous_sessions")
+}
+
+// ============================================
+// SESSÕES AUTENTICADAS
+// ============================================
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  refreshToken String   @unique
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+  lastUsedAt   DateTime @default(now())
+  ipHash       String?  // Hash do IP, não IP real
+  userAgent    String?
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+// ============================================
+// LOGS DE ATIVIDADE (USUÁRIOS AUTENTICADOS)
+// ============================================
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String
+  action      String   // "metadata_scan", "steganography_encode", "ela_analysis", etc
+  timestamp   DateTime @default(now())
+  duration    Int?     // Duração em ms
+  success     Boolean  @default(true)
+  
+  // ⚠️ NÃO armazenamos:
+  // - Conteúdo dos arquivos
+  // - Metadados extraídos
+  // - Dados sensíveis
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([timestamp])
+  @@map("activity_logs")
+}
+
+// ============================================
+// LOGS AGREGADOS (SESSÕES ANÔNIMAS)
+// ============================================
+
+model AnonymousActivityLog {
+  id        String   @id @default(cuid())
+  sessionId String
+  action    String
+  timestamp DateTime @default(now())
+  
+  // Apenas contador agregado, sem detalhes
+  session AnonymousSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  @@index([sessionId])
+  @@map("anonymous_activity_logs")
+}
+
+// ============================================
+// RATE LIMITING
+// ============================================
+
+model RateLimit {
+  id         String   @id @default(cuid())
+  identifier String   @unique // Hash de IP ou session ID
+  count      Int      @default(1)
+  windowStart DateTime @default(now())
+  expiresAt  DateTime
+  
+  @@index([identifier])
+  @@index([expiresAt])
+  @@map("rate_limits")
+}
+
+// ============================================
+// DESAFIOS CTF (GAMIFICAÇÃO)
+// ============================================
+
+model Challenge {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  difficulty  String   // "easy", "medium", "hard"
+  category    String   // "metadata", "steganography", "forensics"
+  points      Int
+  imageUrl    String?
+  solution    String   // Hash da solução
+  hints       String[] // Array de dicas
+  createdAt   DateTime @default(now())
+  active      Boolean  @default(true)
+  
+  // Relações
+  completions ChallengeCompletion[]
+  
+  @@map("challenges")
+}
+
+// ============================================
+// CONCLUSÕES DE DESAFIOS
+// ============================================
+
+model ChallengeCompletion {
+  id          String   @id @default(cuid())
+  userId      String
+  challengeId String
+  completedAt DateTime @default(now())
+  timeSpent   Int      // Tempo em segundos
+  
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, challengeId])
+  @@index([userId])
+  @@map("challenge_completions")
+}
+
+// ============================================
+// ESTATÍSTICAS AGREGADAS (DASHBOARD)
+// ============================================
+
+model UserStats {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  totalAnalyses         Int      @default(0)
+  metadataScans         Int      @default(0)
+  steganographyOps      Int      @default(0)
+  elaAnalyses           Int      @default(0)
+  challengesCompleted   Int      @default(0)
+  totalPoints           Int      @default(0)
+  learningScore         Int      @default(0) // 0-100
+  lastUpdated           DateTime @updatedAt
+  
+  @@map("user_stats")
+}
