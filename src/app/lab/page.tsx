@@ -12,6 +12,7 @@ import { extractStrings, type StringsResult } from '@/lib/forensics/strings-extr
 import { sliceBitPlanes, type BitPlaneResult } from '@/lib/forensics/bit-plane-slicer';
 import { readHexChunk, type HexChunk } from '@/lib/forensics/hex-viewer';
 import { generateProfileLinks, type SocialPlatform } from '@/lib/osint/social-platforms';
+import { generateSpectrogram, type SpectrogramResult } from '@/lib/forensics/spectrogram';
 
 type ToolId =
   | 'metadata'
@@ -23,7 +24,9 @@ type ToolId =
   | 'stego-scan'
   | 'strings'
   | 'bitplane'
+  | 'bitplane'
   | 'hex'
+  | 'spectrogram'
   | 'osint-user';
 
 type ToolCategory = 'Forensics' | 'Steganography' | 'OSINT' | 'Analysis';
@@ -47,6 +50,7 @@ const tools: ToolDef[] = [
   { id: 'hex', name: 'Deep Hex Inspector', icon: '💾', desc: 'Análise binária (Hex/ASCII)', category: 'Forensics' },
   { id: 'strings', name: 'Strings Extractor', icon: '📝', desc: 'Busca de padrões de texto', category: 'Forensics' },
   { id: 'bitplane', name: 'Bit Plane Slicer', icon: '🍰', desc: 'Decomposição de camadas de bits', category: 'Forensics' },
+  { id: 'spectrogram', name: 'Audio Spectrogram', icon: '🎼', desc: 'Análise de espectro de áudio', category: 'Forensics' },
 
   // Steganography
   { id: 'stego-scan', name: 'Stego Analyzer', icon: '🛰️', desc: 'Detecção estatística LSB', category: 'Steganography' },
@@ -78,6 +82,7 @@ export default function LabPage() {
   // Status & Results
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [progress, setProgress] = useState(0); // Progress para operações longas
 
   const [metadataResult, setMetadataResult] = useState<MetadataResult | null>(null);
   const [integrityResult, setIntegrityResult] = useState<IntegrityResult | null>(null);
@@ -88,6 +93,7 @@ export default function LabPage() {
   const [stegoScanResult, setStegoScanResult] = useState<{ suspicious: boolean; score: number; indicators: string[] } | null>(null);
   const [stringsResult, setStringsResult] = useState<StringsResult | null>(null);
   const [bitPlaneResult, setBitPlaneResult] = useState<BitPlaneResult | null>(null);
+  const [spectrogramResult, setSpectrogramResult] = useState<SpectrogramResult | null>(null);
   const [osintResult, setOsintResult] = useState<Array<SocialPlatform & { link: string }> | null>(null);
 
   useEffect(() => {
@@ -118,6 +124,7 @@ export default function LabPage() {
     setStegoScanResult(null);
     setStringsResult(null);
     setBitPlaneResult(null);
+    setSpectrogramResult(null);
     setHexResult(null);
     setHexOffset(0);
     setOsintResult(null);
@@ -200,14 +207,24 @@ export default function LabPage() {
       }
 
       if (activeTool === 'strings') {
-        const result = await extractStrings(file, minLength);
+        setProgress(0);
+        const result = await extractStrings(file, minLength, {
+          onProgress: (percent) => setProgress(percent),
+        });
         setStringsResult(result);
+        setProgress(100);
         if (!result.success) throw new Error(result.error);
       }
 
       if (activeTool === 'bitplane') {
         const result = await sliceBitPlanes(file);
         setBitPlaneResult(result);
+        if (!result.success) throw new Error(result.error);
+      }
+
+      if (activeTool === 'spectrogram') {
+        const result = await generateSpectrogram(file);
+        setSpectrogramResult(result);
         if (!result.success) throw new Error(result.error);
       }
 
@@ -364,7 +381,7 @@ export default function LabPage() {
                         }
                       }}
                       style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
-                      accept={(activeTool === 'strings' || activeTool === 'hex' || activeTool === 'integrity') ? '*/*' : 'image/*'}
+                      accept={activeTool === 'spectrogram' ? 'audio/*' : (activeTool === 'strings' || activeTool === 'hex' || activeTool === 'integrity') ? '*/*' : 'image/*'}
                       disabled={busy}
                     />
                     {file ? (
@@ -427,6 +444,21 @@ export default function LabPage() {
                   />
                 )}
 
+                {busy && progress > 0 && progress < 100 && (
+                  <div className="mb-2">
+                    <div className="flex justify-between text-xs text-muted mb-1">
+                      <span>Processando...</span>
+                      <span>{progress}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-black/30 rounded overflow-hidden">
+                      <div 
+                        className="h-full bg-accent-primary transition-all duration-300" 
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+                
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                   <button className="btn btn-primary" onClick={runTool} disabled={busy} style={{ flex: 1 }}>
                     {busy ? 'Processando...' : 'Executar Análise'}
@@ -449,7 +481,7 @@ export default function LabPage() {
               <h3 className="text-sm font-bold text-accent" style={{ marginBottom: '1rem', textTransform: 'uppercase' }}>Resultados</h3>
 
               {/* Default Preview */}
-              {previewUrl && !activeTool.match(/hex|strings|integrity|osint-user/) && (
+              {previewUrl && !activeTool.match(/hex|strings|integrity|osint-user|spectrogram/) && (
                 <div style={{ marginBottom: '1.5rem', borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid var(--border-primary)', background: '#000' }}>
                   <Image
                     src={previewUrl}
@@ -537,9 +569,25 @@ export default function LabPage() {
                 {/* Strings */}
                 {activeTool === 'strings' && stringsResult && (
                   <div>
-                    <div className="text-sm text-accent mb-2">Strings encontradas: {stringsResult.totalFound}</div>
+                    <div className="grid grid-cols-2 gap-4 mb-3">
+                      <div className="p-3 bg-black/30 rounded">
+                        <div className="text-xs text-muted">Total Encontrado</div>
+                        <div className="text-sm font-bold text-accent">{stringsResult.totalFound}</div>
+                      </div>
+                      <div className="p-3 bg-black/30 rounded">
+                        <div className="text-xs text-muted">Exibindo</div>
+                        <div className="text-sm font-bold">{stringsResult.returned}</div>
+                      </div>
+                    </div>
+                    {stringsResult.truncated && (
+                      <div className="text-xs text-yellow-400 mb-2 p-2 bg-yellow-500/10 rounded border border-yellow-500/30">
+                        ⚠️ Resultado truncado - mostrando apenas as primeiras {stringsResult.returned} strings
+                      </div>
+                    )}
                     <pre className="text-xs p-4 bg-black/30 rounded overflow-auto max-h-[500px] whitespace-pre-wrap text-green-400 font-mono">
-                      {stringsResult.strings?.join('\n')}
+                      {stringsResult.matches?.map((match, idx) => (
+                        `[0x${match.offset.toString(16).padStart(8, '0')}] ${match.value}`
+                      )).join('\n')}
                     </pre>
                   </div>
                 )}
@@ -592,6 +640,28 @@ export default function LabPage() {
                       <p className="text-xs text-muted mt-2">{elaResult.explanation}</p>
                     </div>
                     {elaResult.elaImage && <Image src={elaResult.elaImage} alt="ELA" width={600} height={400} className="w-full rounded border border-border-primary" unoptimized />}
+                  </div>
+                )}
+
+                {/* Spectrogram */}
+                {activeTool === 'spectrogram' && spectrogramResult && (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-black/30 rounded border border-border-primary">
+                      <div className="text-xs text-muted">Duração do Áudio</div>
+                      <div className="text-xl font-bold text-accent">{spectrogramResult.duration?.toFixed(2)}s</div>
+                    </div>
+                    {spectrogramResult.spectrogram && (
+                      <div className="overflow-x-auto bg-black/40 p-2 rounded border border-border-primary">
+                        <Image
+                          src={spectrogramResult.spectrogram}
+                          alt="Spectrogram"
+                          width={4096}
+                          height={512}
+                          className="h-[250px] w-auto max-w-none"
+                          unoptimized
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
 
