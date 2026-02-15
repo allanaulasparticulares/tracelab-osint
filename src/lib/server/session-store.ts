@@ -1,7 +1,4 @@
-import { promises as fs } from 'fs';
-import path from 'path';
 import crypto from 'crypto';
-import { getSupabaseAdmin } from '@/lib/server/supabase-admin';
 
 export type SessionRecord = {
   id: string;
@@ -11,207 +8,102 @@ export type SessionRecord = {
   expiresAt: string;
 };
 
-type SessionStore = {
-  sessions: SessionRecord[];
-};
-
-const dataDir = path.join(process.cwd(), 'data');
-const filePath = path.join(dataDir, 'sessions.json');
-const APP_SESSIONS_TABLE = 'app_sessions';
+// Segredo para assinar o cookie. Usamos a SERVICE_KEY pois ela é segura e estável no backend.
+const SECRET_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'default-insecure-secret-dev-only';
 
 export async function createSession(email: string, ttlSeconds: number): Promise<string> {
-  const fromSupabase = await createSessionSupabase(email, ttlSeconds);
-  if (fromSupabase) return fromSupabase;
-
-  const store = await readStore();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + ttlSeconds * 1000);
-  const id = crypto.randomUUID();
 
-  store.sessions = store.sessions.filter((session) => new Date(session.expiresAt).getTime() > Date.now());
-  store.sessions.push({
-    id,
+  const payload: SessionRecord = {
+    id: crypto.randomUUID(),
     email: normalizeEmail(email),
     createdAt: now.toISOString(),
     lastActivityAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
-  });
+  };
 
-  await writeStore(store);
-  return id;
+  return signSession(payload);
 }
 
-export async function getSession(sessionId: string): Promise<SessionRecord | null> {
-  const fromSupabase = await getSessionSupabase(sessionId);
-  if (fromSupabase) return fromSupabase;
-
-  const store = await readStore();
-  const session = store.sessions.find((item) => item.id === sessionId);
+export async function getSession(token: string): Promise<SessionRecord | null> {
+  if (!token) return null;
+  const session = verifySession(token);
   if (!session) return null;
-  if (new Date(session.expiresAt).getTime() <= Date.now()) return null;
-  return session;
-}
 
-export async function touchSession(sessionId: string, ttlSeconds: number): Promise<SessionRecord | null> {
-  const fromSupabase = await touchSessionSupabase(sessionId, ttlSeconds);
-  if (fromSupabase) return fromSupabase;
-
-  const store = await readStore();
-  const idx = store.sessions.findIndex((item) => item.id === sessionId);
-  if (idx === -1) return null;
-
-  const current = store.sessions[idx];
-  if (new Date(current.expiresAt).getTime() <= Date.now()) {
-    store.sessions.splice(idx, 1);
-    await writeStore(store);
+  if (new Date(session.expiresAt).getTime() <= Date.now()) {
     return null;
   }
 
+  return session;
+}
+
+// Em stateless, "touch" significa gerar um novo token com nova expiração.
+// Como não podemos atualizar o cookie aqui facilmente sem acesso a Response,
+// apenas retornamos o objeto atualizado para quem chamar (middleware) re-setar o cookie.
+export async function touchSession(token: string, ttlSeconds: number): Promise<string | null> {
+  const session = await getSession(token);
+  if (!session) return null;
+
   const now = new Date();
   const nextExpires = new Date(now.getTime() + ttlSeconds * 1000);
+
   const updated: SessionRecord = {
-    ...current,
+    ...session,
     lastActivityAt: now.toISOString(),
     expiresAt: nextExpires.toISOString(),
   };
-  store.sessions[idx] = updated;
-  await writeStore(store);
-  return updated;
+
+  return signSession(updated);
 }
 
-export async function revokeSession(sessionId: string): Promise<void> {
-  const usedSupabase = await revokeSessionSupabase(sessionId);
-  if (usedSupabase) return;
-
-  const store = await readStore();
-  store.sessions = store.sessions.filter((item) => item.id !== sessionId);
-  await writeStore(store);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function revokeSession(_token: string): Promise<void> {
+  // Em stateless, não podemos revogar tokens sem blacklist.
+  // Para este app, vamos confiar na expiração curta.
+  // O cliente deve apagar o cookie.
+  return;
 }
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-function mapSessionRow(row: Record<string, unknown>): SessionRecord {
-  return {
-    id: String(row.id || ''),
-    email: normalizeEmail(String(row.email || '')),
-    createdAt: String(row.created_at || new Date().toISOString()),
-    lastActivityAt: String(row.last_activity_at || new Date().toISOString()),
-    expiresAt: String(row.expires_at || new Date().toISOString()),
-  };
+// --- Helpers de Assinatura (HMAC SHA-256) ---
+
+function signSession(payload: SessionRecord): string {
+  const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto
+    .createHmac('sha256', SECRET_KEY)
+    .update(data)
+    .digest('base64url');
+
+  return `${data}.${signature}`;
 }
 
-async function createSessionSupabase(email: string, ttlSeconds: number): Promise<string | null> {
-  const admin = getSupabaseAdmin();
-  if (!admin) return null;
-
-  const now = new Date();
-  const id = crypto.randomUUID();
-  const expiresAt = new Date(now.getTime() + ttlSeconds * 1000).toISOString();
-  const { error } = await admin.from(APP_SESSIONS_TABLE).insert({
-    id,
-    email: normalizeEmail(email),
-    created_at: now.toISOString(),
-    last_activity_at: now.toISOString(),
-    expires_at: expiresAt,
-  });
-
-  if (error) {
-    console.error('Supabase createSession error:', error.message);
-    return null;
-  }
-
-  return id;
-}
-
-async function getSessionSupabase(sessionId: string): Promise<SessionRecord | null> {
-  const admin = getSupabaseAdmin();
-  if (!admin) return null;
-
-  const { data, error } = await admin
-    .from(APP_SESSIONS_TABLE)
-    .select('id, email, created_at, last_activity_at, expires_at')
-    .eq('id', sessionId)
-    .maybeSingle();
-
-  if (error) {
-    console.error('Supabase getSession error:', error.message);
-    return null;
-  }
-  if (!data) return null;
-
-  const session = mapSessionRow(data);
-  if (new Date(session.expiresAt).getTime() <= Date.now()) {
-    await revokeSessionSupabase(sessionId);
-    return null;
-  }
-
-  return session;
-}
-
-async function touchSessionSupabase(sessionId: string, ttlSeconds: number): Promise<SessionRecord | null> {
-  const admin = getSupabaseAdmin();
-  if (!admin) return null;
-
-  const current = await getSessionSupabase(sessionId);
-  if (!current) return null;
-
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + ttlSeconds * 1000).toISOString();
-  const { data, error } = await admin
-    .from(APP_SESSIONS_TABLE)
-    .update({
-      last_activity_at: now.toISOString(),
-      expires_at: expiresAt,
-    })
-    .eq('id', sessionId)
-    .select('id, email, created_at, last_activity_at, expires_at')
-    .maybeSingle();
-
-  if (error) {
-    console.error('Supabase touchSession error:', error.message);
-    return null;
-  }
-  if (!data) return null;
-  return mapSessionRow(data);
-}
-
-async function revokeSessionSupabase(sessionId: string): Promise<boolean> {
-  const admin = getSupabaseAdmin();
-  if (!admin) return false;
-
-  const { error } = await admin.from(APP_SESSIONS_TABLE).delete().eq('id', sessionId);
-  if (error) {
-    console.error('Supabase revokeSession error:', error.message);
-    return false;
-  }
-  return true;
-}
-
-async function readStore(): Promise<SessionStore> {
-  await ensureStore();
-  const raw = await fs.readFile(filePath, 'utf8');
+function verifySession(token: string): SessionRecord | null {
   try {
-    const parsed = JSON.parse(raw) as SessionStore;
-    return {
-      sessions: Array.isArray(parsed?.sessions) ? parsed.sessions : [],
-    };
+    const parts = token.split('.');
+    if (parts.length !== 2) return null;
+
+    const [data, signature] = parts;
+
+    const expectedSignature = crypto
+      .createHmac('sha256', SECRET_KEY)
+      .update(data)
+      .digest('base64url');
+
+    // Timing safe compare
+    const a = Buffer.from(signature);
+    const b = Buffer.from(expectedSignature);
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+      return null;
+    }
+
+    const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf-8')) as SessionRecord;
+    return payload;
   } catch {
-    return { sessions: [] };
+    return null;
   }
 }
 
-async function writeStore(store: SessionStore): Promise<void> {
-  await ensureStore();
-  await fs.writeFile(filePath, JSON.stringify(store, null, 2), 'utf8');
-}
-
-async function ensureStore(): Promise<void> {
-  await fs.mkdir(dataDir, { recursive: true });
-  try {
-    await fs.access(filePath);
-  } catch {
-    await fs.writeFile(filePath, JSON.stringify({ sessions: [] }, null, 2), 'utf8');
-  }
-}

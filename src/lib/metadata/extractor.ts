@@ -3,6 +3,9 @@
  * Extrai EXIF, IPTC, XMP, GPS e outros metadados de arquivos
  */
 
+// @ts-expect-error piexifjs types are missing
+import piexif from 'piexifjs';
+
 export interface MetadataResult {
     success: boolean;
     metadata?: MetadataCollection;
@@ -20,6 +23,7 @@ export interface MetadataCollection {
     timestamps?: TimestampInfo;
     iptc?: Record<string, unknown>;
     xmp?: Record<string, unknown>;
+    raw?: Record<string, unknown>; // Para debug ou dados não categorizados
 }
 
 export interface GPSData {
@@ -59,9 +63,6 @@ export interface TimestampInfo {
  */
 export async function extractImageMetadata(file: File): Promise<MetadataResult> {
     try {
-        const arrayBuffer = await file.arrayBuffer();
-        const dataView = new DataView(arrayBuffer);
-
         const metadata: MetadataCollection = {
             basic: {
                 fileName: file.name,
@@ -72,10 +73,10 @@ export async function extractImageMetadata(file: File): Promise<MetadataResult> 
         };
 
         // Detectar tipo de arquivo e extrair metadados específicos
-        if (file.type === 'image/jpeg' || file.name.toLowerCase().endsWith('.jpg')) {
-            await extractJPEGMetadata(dataView, metadata);
+        if (file.type === 'image/jpeg' || file.name.toLowerCase().endsWith('.jpg') || file.name.toLowerCase().endsWith('.jpeg')) {
+            await extractJPEGMetadata(file, metadata);
         } else if (file.type === 'image/png') {
-            await extractPNGMetadata(dataView, metadata);
+            await extractPNGMetadata(file, metadata);
         }
 
         // Calcular nível de risco
@@ -96,153 +97,135 @@ export async function extractImageMetadata(file: File): Promise<MetadataResult> 
 }
 
 /**
- * Extrai metadados EXIF de JPEG
+ * Extrai metadados EXIF de JPEG usando piexifjs
  */
-async function extractJPEGMetadata(dataView: DataView, metadata: MetadataCollection) {
-    // Verificar assinatura JPEG
-    if (dataView.getUint16(0) !== 0xFFD8) {
-        throw new Error('Arquivo JPEG inválido');
-    }
+async function extractJPEGMetadata(file: File, metadata: MetadataCollection) {
+    const dataUrl = await fileToDataURL(file);
 
-    let offset = 2;
-    const exifData: Record<string, unknown> = {};
-    const gpsData: GPSData = {};
-    const deviceInfo: DeviceInfo = {};
-    const softwareInfo: SoftwareInfo = {};
-    const timestamps: TimestampInfo = {};
+    try {
+        const exifObj = piexif.load(dataUrl);
+        const exifData: Record<string, unknown> = {};
+        const gpsData: GPSData = {};
+        const deviceInfo: DeviceInfo = {};
+        const softwareInfo: SoftwareInfo = {};
+        const timestamps: TimestampInfo = {};
 
-    while (offset < dataView.byteLength) {
-        const marker = dataView.getUint16(offset);
-        offset += 2;
+        // Helper para processar tags
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const processTags = (ifd: string, tags: Record<string, any>) => {
+            for (const tag in tags) {
+                const tagId = parseInt(tag);
+                const value = tags[tag];
 
-        // APP1 marker (EXIF)
-        if (marker === 0xFFE1) {
-            const segmentLength = dataView.getUint16(offset);
-            offset += 2;
+                // Tenta obter o nome da tag do piexifjs
+                let tagName = 'Unknown';
+                if (piexif.TAGS[ifd] && piexif.TAGS[ifd][tagId]) {
+                    tagName = piexif.TAGS[ifd][tagId].name;
+                }
 
-            // Verificar assinatura EXIF
-            const exifSignature = String.fromCharCode(
-                dataView.getUint8(offset),
-                dataView.getUint8(offset + 1),
-                dataView.getUint8(offset + 2),
-                dataView.getUint8(offset + 3)
-            );
+                // Processar valores específicos
+                if (ifd === 'GPS') {
+                    // Mapeamento específico de GPS
+                    if (tagName === 'GPSLatitude') {
+                        const ref = tags[piexif.TAGS.GPS.GPSLatitudeRef] || 'N';
+                        gpsData.latitude = convertDMSToDD(value, ref);
+                    } else if (tagName === 'GPSLongitude') {
+                        const ref = tags[piexif.TAGS.GPS.GPSLongitudeRef] || 'E';
+                        gpsData.longitude = convertDMSToDD(value, ref);
+                    } else if (tagName === 'GPSAltitude') {
+                        gpsData.altitude = Array.isArray(value) && value.length === 2 ? value[0] / value[1] : value;
+                    } else if (tagName !== 'GPSLatitudeRef' && tagName !== 'GPSLongitudeRef') {
+                        // Outros campos GPS
+                        gpsData[tagName] = formatValue(value);
+                    }
+                } else {
+                    const formattedValue = formatValue(value);
+                    exifData[tagName] = formattedValue;
 
-            if (exifSignature === 'Exif') {
-                offset += 6; // Pular "Exif\0\0"
+                    // Categorizar
+                    if (tagName === 'Make') deviceInfo.make = String(formattedValue);
+                    if (tagName === 'Model') deviceInfo.model = String(formattedValue);
+                    if (tagName === 'BodySerialNumber' || tagName === 'CameraOwnerName') deviceInfo.serialNumber = String(formattedValue);
+                    if (tagName === 'LensModel') deviceInfo.lensModel = String(formattedValue);
 
-                // Determinar endianness
-                const tiffHeader = dataView.getUint16(offset);
-                const littleEndian = tiffHeader === 0x4949;
+                    if (tagName === 'Software') softwareInfo.software = String(formattedValue);
 
-                // Extrair tags EXIF
-                const ifdOffset = dataView.getUint32(offset + 4, littleEndian);
-                parseIFD(dataView, offset + ifdOffset, littleEndian, exifData, gpsData, deviceInfo, softwareInfo, timestamps);
+                    if (tagName === 'DateTime') timestamps.modified = String(formattedValue);
+                    if (tagName === 'DateTimeOriginal') timestamps.original = String(formattedValue);
+                    if (tagName === 'DateTimeDigitized') timestamps.digitized = String(formattedValue);
+                }
             }
+        };
 
-            offset += segmentLength - 2;
-        } else if (marker === 0xFFDA) {
-            // Start of scan - fim dos metadados
-            break;
-        } else {
-            // Pular outros segmentos
-            const segmentLength = dataView.getUint16(offset);
-            offset += segmentLength;
-        }
-    }
+        if (exifObj['0th']) processTags('0th', exifObj['0th']);
+        if (exifObj['Exif']) processTags('Exif', exifObj['Exif']);
+        if (exifObj['GPS']) processTags('GPS', exifObj['GPS']);
+        if (exifObj['1st']) processTags('1st', exifObj['1st']);
 
-    metadata.exif = exifData;
-    if (Object.keys(gpsData).length > 0) metadata.gps = gpsData;
-    if (Object.keys(deviceInfo).length > 0) metadata.device = deviceInfo;
-    if (Object.keys(softwareInfo).length > 0) metadata.software = softwareInfo;
-    if (Object.keys(timestamps).length > 0) metadata.timestamps = timestamps;
-}
+        metadata.exif = exifData;
+        if (Object.keys(gpsData).length > 0) metadata.gps = gpsData;
+        if (Object.keys(deviceInfo).length > 0) metadata.device = deviceInfo;
+        if (Object.keys(softwareInfo).length > 0) metadata.software = softwareInfo;
+        if (Object.keys(timestamps).length > 0) metadata.timestamps = timestamps;
 
-/**
- * Parse IFD (Image File Directory) EXIF
- */
-function parseIFD(
-    dataView: DataView,
-    offset: number,
-    littleEndian: boolean,
-    exifData: Record<string, unknown>,
-    gpsData: GPSData,
-    deviceInfo: DeviceInfo,
-    softwareInfo: SoftwareInfo,
-    timestamps: TimestampInfo
-) {
-    const numEntries = dataView.getUint16(offset, littleEndian);
-    offset += 2;
-
-    for (let i = 0; i < numEntries; i++) {
-        const tag = dataView.getUint16(offset, littleEndian);
-        const type = dataView.getUint16(offset + 2, littleEndian);
-        const count = dataView.getUint32(offset + 4, littleEndian);
-        const valueOffset = dataView.getUint32(offset + 8, littleEndian);
-
-        // Mapear tags conhecidas
-        const tagName = EXIF_TAGS[tag] || `Unknown_${tag}`;
-        let value: unknown;
-
-        // Extrair valor baseado no tipo
-        if (type === 2) { // ASCII string
-            value = readString(dataView, offset + 8, count);
-        } else if (type === 3) { // Short
-            value = dataView.getUint16(offset + 8, littleEndian);
-        } else if (type === 4) { // Long
-            value = dataView.getUint32(offset + 8, littleEndian);
-        } else if (type === 5) { // Rational
-            const numerator = dataView.getUint32(valueOffset, littleEndian);
-            const denominator = dataView.getUint32(valueOffset + 4, littleEndian);
-            value = denominator !== 0 ? numerator / denominator : 0;
-        }
-
-        // Categorizar metadados
-        if (GPS_TAGS[tag]) {
-            const gpsField = GPS_FIELD_MAP[tag];
-            if (gpsField) {
-                gpsData[gpsField] = value;
-            } else {
-                gpsData[GPS_TAGS[tag]] = value;
-            }
-        } else if (DEVICE_TAGS.includes(tag)) {
-            const deviceField = DEVICE_FIELD_MAP[tag];
-            if (deviceField) {
-                deviceInfo[deviceField] = value;
-            } else {
-                deviceInfo[tagName] = value;
-            }
-        } else if (SOFTWARE_TAGS.includes(tag)) {
-            const softwareField = SOFTWARE_FIELD_MAP[tag];
-            if (softwareField) {
-                softwareInfo[softwareField] = value;
-            } else {
-                softwareInfo[tagName] = value;
-            }
-        } else if (TIMESTAMP_TAGS.includes(tag)) {
-            const timestampField = TIMESTAMP_FIELD_MAP[tag];
-            if (timestampField) {
-                timestamps[timestampField] = value;
-            } else {
-                timestamps[tagName] = value;
-            }
-        } else {
-            exifData[tagName] = value;
-        }
-
-        offset += 12;
+    } catch (e) {
+        console.warn('Erro pexifjs or no exif:', e);
+        // Fallback or just ignore if no exif
     }
 }
 
+function formatValue(val: unknown): unknown {
+    if (val === null || val === undefined) return val;
+    // Racional: [numerador, denominador]
+    if (Array.isArray(val) && val.length === 2 && typeof val[0] === 'number' && typeof val[1] === 'number') {
+        return val[1] !== 0 ? val[0] / val[1] : 0;
+    }
+    // String com null char
+    if (typeof val === 'string') {
+        // Remover null bytes e trim
+        return val.replace(/\0/g, '').trim();
+    }
+    return val;
+}
+
+function convertDMSToDD(dms: number[][], ref: string): number {
+    if (!Array.isArray(dms) || dms.length !== 3) return 0;
+
+    const d = dms[0][0] / dms[0][1];
+    const m = dms[1][0] / dms[1][1];
+    const s = dms[2][0] / dms[2][1];
+
+    let dd = d + m / 60 + s / 3600;
+
+    if (ref === 'S' || ref === 'W') {
+        dd = dd * -1;
+    }
+
+    return dd;
+}
+
+function fileToDataURL(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
+
 /**
- * Extrai metadados de PNG
+ * Extrai metadados de PNG (mantido implementação manual pois piexifjs foca em JPEG)
  */
-async function extractPNGMetadata(dataView: DataView, metadata: MetadataCollection) {
+async function extractPNGMetadata(file: File, metadata: MetadataCollection) {
+    const arrayBuffer = await file.arrayBuffer();
+    const dataView = new DataView(arrayBuffer);
     // Verificar assinatura PNG
     const signature = [137, 80, 78, 71, 13, 10, 26, 10];
     for (let i = 0; i < 8; i++) {
         if (dataView.getUint8(i) !== signature[i]) {
-            throw new Error('Arquivo PNG inválido');
+            // Não falhar silenciosamente, mas também não é crítico
+            return;
         }
     }
 
@@ -359,118 +342,9 @@ function assessPrivacyRisk(metadata: MetadataCollection): {
     return { riskLevel, warnings };
 }
 
-/**
- * Remove metadados de imagem
- */
-export async function stripMetadata(file: File): Promise<Blob> {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Canvas context not available');
-
-    const img = await loadImage(file);
-    canvas.width = img.width;
-    canvas.height = img.height;
-    ctx.drawImage(img, 0, 0);
-
-    return new Promise((resolve, reject) => {
-        canvas.toBlob((blob) => {
-            if (blob) resolve(blob);
-            else reject(new Error('Failed to create blob'));
-        }, 'image/png');
-    });
-}
-
-// Funções auxiliares
-
-function loadImage(file: File): Promise<HTMLImageElement> {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        const objectUrl = URL.createObjectURL(file);
-        img.onload = () => {
-            URL.revokeObjectURL(objectUrl);
-            resolve(img);
-        };
-        img.onerror = (error) => {
-            URL.revokeObjectURL(objectUrl);
-            reject(error);
-        };
-        img.src = objectUrl;
-    });
-}
-
-function readString(dataView: DataView, offset: number, length: number): string {
-    let str = '';
-    for (let i = 0; i < length - 1; i++) {
-        const char = dataView.getUint8(offset + i);
-        if (char === 0) break;
-        str += String.fromCharCode(char);
-    }
-    return str;
-}
-
 function formatFileSize(bytes: number): string {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
     if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
     return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
 }
-
-// Tags EXIF conhecidas
-const EXIF_TAGS: Record<number, string> = {
-    0x010F: 'Make',
-    0x0110: 'Model',
-    0x0112: 'Orientation',
-    0x011A: 'XResolution',
-    0x011B: 'YResolution',
-    0x0128: 'ResolutionUnit',
-    0x0131: 'Software',
-    0x0132: 'DateTime',
-    0x013B: 'Artist',
-    0x8298: 'Copyright',
-    0x829A: 'ExposureTime',
-    0x829D: 'FNumber',
-    0x8822: 'ExposureProgram',
-    0x8827: 'ISOSpeedRatings',
-    0x9003: 'DateTimeOriginal',
-    0x9004: 'DateTimeDigitized',
-    0xA002: 'PixelXDimension',
-    0xA003: 'PixelYDimension',
-    0xA420: 'ImageUniqueID'
-};
-
-const GPS_TAGS: Record<number, string> = {
-    0x0001: 'GPSLatitudeRef',
-    0x0002: 'GPSLatitude',
-    0x0003: 'GPSLongitudeRef',
-    0x0004: 'GPSLongitude',
-    0x0005: 'GPSAltitudeRef',
-    0x0006: 'GPSAltitude',
-    0x0007: 'GPSTimeStamp'
-};
-
-const GPS_FIELD_MAP: Partial<Record<number, keyof GPSData>> = {
-    0x0002: 'latitude',
-    0x0004: 'longitude',
-    0x0006: 'altitude',
-    0x0007: 'timestamp'
-};
-
-const DEVICE_FIELD_MAP: Partial<Record<number, keyof DeviceInfo>> = {
-    0x010F: 'make',
-    0x0110: 'model',
-    0xA420: 'serialNumber'
-};
-
-const SOFTWARE_FIELD_MAP: Partial<Record<number, keyof SoftwareInfo>> = {
-    0x0131: 'software'
-};
-
-const TIMESTAMP_FIELD_MAP: Partial<Record<number, keyof TimestampInfo>> = {
-    0x0132: 'modified',
-    0x9003: 'original',
-    0x9004: 'digitized'
-};
-
-const DEVICE_TAGS = [0x010F, 0x0110, 0xA420];
-const SOFTWARE_TAGS = [0x0131];
-const TIMESTAMP_TAGS = [0x0132, 0x9003, 0x9004];

@@ -12,8 +12,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Sessão inexistente.' }, { status: 401 });
   }
 
-  const activeSession = await touchSession(session, SESSION_MAX_AGE_SECONDS);
-  if (!activeSession) {
+  const newToken = await touchSession(session, SESSION_MAX_AGE_SECONDS);
+  if (!newToken) {
     const expiredResponse = NextResponse.json({ success: false, error: 'Sessão expirada.' }, { status: 401 });
     expiredResponse.cookies.set(SESSION_COOKIE, '', {
       httpOnly: true,
@@ -26,9 +26,9 @@ export async function POST(req: NextRequest) {
   }
 
   const response = NextResponse.json({ success: true });
-  response.cookies.set(SESSION_COOKIE, activeSession.id, {
+  response.cookies.set(SESSION_COOKIE, newToken, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: false, // process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/',
     maxAge: SESSION_MAX_AGE_SECONDS,

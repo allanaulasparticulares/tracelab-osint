@@ -8,6 +8,10 @@ import { analyzeIntegrity, type IntegrityResult } from '@/lib/forensics/integrit
 import { scanInconsistencies, type InconsistencyReport } from '@/lib/forensics/inconsistency-scanner';
 import { performELA, type ELAResult } from '@/lib/forensics/ela-analysis';
 import { analyzePNG, decodePNG, encodePNG } from '@/lib/steganography/png-stego';
+import { extractStrings, type StringsResult } from '@/lib/forensics/strings-extractor';
+import { sliceBitPlanes, type BitPlaneResult } from '@/lib/forensics/bit-plane-slicer';
+import { readHexChunk, type HexChunk } from '@/lib/forensics/hex-viewer';
+import { generateProfileLinks, type SocialPlatform } from '@/lib/osint/social-platforms';
 
 type ToolId =
   | 'metadata'
@@ -16,26 +20,62 @@ type ToolId =
   | 'ela'
   | 'stego-encode'
   | 'stego-decode'
-  | 'stego-scan';
+  | 'stego-scan'
+  | 'strings'
+  | 'bitplane'
+  | 'hex'
+  | 'osint-user';
 
-const tools: Array<{ id: ToolId; name: string; icon: string; desc: string; color: string }> = [
-  { id: 'metadata', name: 'Metadata Intelligence', icon: '🔍', desc: 'EXIF, GPS e risco de privacidade', color: '#00e5ff' },
-  { id: 'integrity', name: 'Integrity Check', icon: '🧬', desc: 'SHA-256, magic bytes e entropia', color: '#3b82f6' },
-  { id: 'inconsistency', name: 'Inconsistency Scanner', icon: '📡', desc: 'Correlação temporal e lógica', color: '#22d3ee' },
-  { id: 'ela', name: 'Error Level Analysis', icon: '🔬', desc: 'Detecção de manipulação por compressão', color: '#ff00aa' },
-  { id: 'stego-encode', name: 'Stego Encode', icon: '🧪', desc: 'Ocultar mensagem em PNG', color: '#a855f7' },
-  { id: 'stego-decode', name: 'Stego Decode', icon: '🗝️', desc: 'Extrair mensagem de PNG', color: '#8b5cf6' },
-  { id: 'stego-scan', name: 'Stego Analyzer', icon: '🛰️', desc: 'Triagem de indícios LSB', color: '#f472b6' },
+type ToolCategory = 'Forensics' | 'Steganography' | 'OSINT' | 'Analysis';
+
+interface ToolDef {
+  id: ToolId;
+  name: string;
+  icon: string;
+  desc: string;
+  category: ToolCategory;
+}
+
+const tools: ToolDef[] = [
+  // Analysis
+  { id: 'metadata', name: 'Metadata Intelligence', icon: '🔍', desc: 'Extração profunda de EXIF/GPS', category: 'Analysis' },
+  { id: 'integrity', name: 'Integrity Check', icon: '🧬', desc: 'Validação de hash e estrutura', category: 'Analysis' },
+  { id: 'inconsistency', name: 'Inconsistency Scanner', icon: '📡', desc: 'Correlação de dados temporais', category: 'Analysis' },
+  { id: 'ela', name: 'Error Level Analysis', icon: '🔬', desc: 'Detecção de manipulação visual', category: 'Analysis' },
+
+  // Forensics
+  { id: 'hex', name: 'Deep Hex Inspector', icon: '💾', desc: 'Análise binária (Hex/ASCII)', category: 'Forensics' },
+  { id: 'strings', name: 'Strings Extractor', icon: '📝', desc: 'Busca de padrões de texto', category: 'Forensics' },
+  { id: 'bitplane', name: 'Bit Plane Slicer', icon: '🍰', desc: 'Decomposição de camadas de bits', category: 'Forensics' },
+
+  // Steganography
+  { id: 'stego-scan', name: 'Stego Analyzer', icon: '🛰️', desc: 'Detecção estatística LSB', category: 'Steganography' },
+  { id: 'stego-decode', name: 'Stego Decode', icon: '🗝️', desc: 'Extrair mensagem oculta', category: 'Steganography' },
+  { id: 'stego-encode', name: 'Stego Encode', icon: '🧪', desc: 'Ocultar mensagem em imagem', category: 'Steganography' },
+
+  // OSINT
+  { id: 'osint-user', name: 'Social Sherlock', icon: '🕵️', desc: 'Rastreio de username em 30+ sites', category: 'OSINT' },
 ];
 
 export default function LabPage() {
   const [activeTool, setActiveTool] = useState<ToolId>('metadata');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+  // Tool States
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState('');
-  const [quality, setQuality] = useState(90);
-  const [secretText, setSecretText] = useState('');
-  const [password, setPassword] = useState('');
+  const [quality, setQuality] = useState(90); // ELA quality
+  const [secretText, setSecretText] = useState(''); // Stego
+  const [password, setPassword] = useState(''); // Stego
+  const [minLength, setMinLength] = useState(4); // Strings
+  const [targetUsername, setTargetUsername] = useState(''); // OSINT
 
+  // Hex Viewer State
+  const [hexOffset, setHexOffset] = useState(0);
+  const [hexResult, setHexResult] = useState<HexChunk | null>(null);
+  const HEX_PAGE_SIZE = 512; // bytes per view
+
+  // Status & Results
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -46,6 +86,9 @@ export default function LabPage() {
   const [stegoEncodeResult, setStegoEncodeResult] = useState<{ image?: string; stats?: { capacity: number; used: number; efficiency: number } } | null>(null);
   const [stegoDecodeResult, setStegoDecodeResult] = useState<string>('');
   const [stegoScanResult, setStegoScanResult] = useState<{ suspicious: boolean; score: number; indicators: string[] } | null>(null);
+  const [stringsResult, setStringsResult] = useState<StringsResult | null>(null);
+  const [bitPlaneResult, setBitPlaneResult] = useState<BitPlaneResult | null>(null);
+  const [osintResult, setOsintResult] = useState<Array<SocialPlatform & { link: string }> | null>(null);
 
   useEffect(() => {
     if (!file) {
@@ -53,7 +96,12 @@ export default function LabPage() {
       return;
     }
     const objectUrl = URL.createObjectURL(file);
-    setPreviewUrl(objectUrl);
+    // Only set preview for images
+    if (file.type.startsWith('image/')) {
+      setPreviewUrl(objectUrl);
+    } else {
+      setPreviewUrl('');
+    }
     return () => URL.revokeObjectURL(objectUrl);
   }, [file]);
 
@@ -68,13 +116,31 @@ export default function LabPage() {
     setStegoEncodeResult(null);
     setStegoDecodeResult('');
     setStegoScanResult(null);
+    setStringsResult(null);
+    setBitPlaneResult(null);
+    setHexResult(null);
+    setHexOffset(0);
+    setOsintResult(null);
   };
 
   const runTool = async () => {
     setError('');
 
+    if (activeTool === 'osint-user') {
+      if (!targetUsername.trim()) {
+        setError('Digite um nome de usuário para pesquisar.');
+        return;
+      }
+      setBusy(true);
+      // Simulating "search" generation
+      const links = generateProfileLinks(targetUsername);
+      setOsintResult(links);
+      setBusy(false);
+      return;
+    }
+
     if (!file) {
-      setError('Selecione uma imagem para continuar.');
+      setError('Selecione um arquivo para continuar.');
       return;
     }
 
@@ -132,6 +198,24 @@ export default function LabPage() {
         const result = await analyzePNG(file);
         setStegoScanResult(result);
       }
+
+      if (activeTool === 'strings') {
+        const result = await extractStrings(file, minLength);
+        setStringsResult(result);
+        if (!result.success) throw new Error(result.error);
+      }
+
+      if (activeTool === 'bitplane') {
+        const result = await sliceBitPlanes(file);
+        setBitPlaneResult(result);
+        if (!result.success) throw new Error(result.error);
+      }
+
+      if (activeTool === 'hex') {
+        const result = await readHexChunk(file, hexOffset, HEX_PAGE_SIZE);
+        setHexResult(result);
+      }
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro inesperado no laboratório.');
     } finally {
@@ -139,307 +223,416 @@ export default function LabPage() {
     }
   };
 
+  const handleHexPage = async (direction: 'next' | 'prev') => {
+    if (!file) return;
+    let newOffset = hexOffset;
+    if (direction === 'next') newOffset += HEX_PAGE_SIZE;
+    else newOffset -= HEX_PAGE_SIZE;
+
+    if (newOffset < 0) newOffset = 0;
+    if (newOffset >= file.size) return; // End
+
+    setHexOffset(newOffset);
+    setBusy(true);
+    try {
+      const result = await readHexChunk(file, newOffset, HEX_PAGE_SIZE);
+      setHexResult(result);
+    } catch {
+      setError('Erro ao ler página hex.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const categories: ToolCategory[] = ['Analysis', 'Forensics', 'Steganography', 'OSINT'];
+
   return (
-    <div className="min-h-screen grid-background" style={{ background: 'var(--bg-primary)' }}>
-      <header className="glass" style={{ borderBottom: '1px solid var(--border-primary)', position: 'sticky', top: 0, zIndex: 50 }}>
-        <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1rem 1.5rem' }}>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}>
-            <Image src="/logo_atual.png" alt="TraceLab OSINT" width={80} height={80} className="brand-logo" />
-            <div>
-              <span className="mono" style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--accent-primary)' }}>TraceLab Lab</span>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>OSINT Forensics Workbench</p>
-            </div>
-          </Link>
+    <div className="lab-layout">
+      {/* Mobile Overlay */}
+      <div
+        className={`mobile-overlay md:hidden ${isSidebarOpen ? 'visible' : ''}`}
+        onClick={() => setIsSidebarOpen(false)}
+      />
 
-          <nav className="mobile-nav">
-            <Link href="/dashboard" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.875rem' }}>Dashboard</Link>
-            <Link href="/challenges" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.875rem' }}>Desafios</Link>
-            <Link href="/api/auth/logout" style={{ color: '#ff5dc3', textDecoration: 'none', fontSize: '0.875rem' }}>Sair</Link>
-          </nav>
-
+      {/* Mobile Header */}
+      <header className="lab-header-mobile">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button className="menu-toggle" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+            ☰
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Image src="/logo_atual.png" alt="Logo" width={32} height={32} />
+            <span className="mono" style={{ fontWeight: 700, color: 'var(--accent-primary)' }}>TraceLab</span>
+          </div>
         </div>
+        <Link href="/dashboard" className="text-sm text-muted" style={{ textDecoration: 'none' }}>Sair</Link>
       </header>
 
-      <main className="container" style={{ padding: '1.6rem 1.5rem 3rem', position: 'relative', zIndex: 2 }}>
-        <section className="glass" style={{ borderRadius: '0.9rem', padding: '1rem', marginBottom: '1rem' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.6rem' }}>
-            {tools.map((tool) => (
-              <button
-                key={tool.id}
-                type="button"
-                onClick={() => {
-                  setActiveTool(tool.id);
-                  clearToolResults();
-                }}
-                className={activeTool === tool.id ? 'btn btn-primary' : 'btn btn-secondary'}
-                style={{ padding: '0.55rem 0.85rem', fontSize: '0.82rem', borderColor: activeTool === tool.id ? tool.color : undefined }}
-              >
-                {tool.icon} {tool.name}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="responsive-grid-2" style={{ alignItems: 'start' }}>
-          <div className="glass" style={{ borderRadius: '0.9rem', padding: '1rem' }}>
-            <h2 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.7rem' }}>{selectedTool?.icon} {selectedTool?.name}</h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '0.9rem' }}>{selectedTool?.desc}</p>
-
-            <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Imagem</label>
-            <input
-              type="file"
-              accept="image/*"
-              className="input"
-              onChange={(event) => {
-                const selected = event.target.files?.[0] || null;
-                setFile(selected);
-                clearToolResults();
-              }}
-              disabled={busy}
-            />
-
-            {(activeTool === 'ela') && (
-              <div style={{ marginTop: '0.9rem' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>
-                  Qualidade ELA: {quality}
-                </label>
-                <input
-                  type="range"
-                  min={65}
-                  max={98}
-                  value={quality}
-                  onChange={(e) => setQuality(Number(e.target.value))}
-                  style={{ width: '100%' }}
-                  disabled={busy}
-                />
-              </div>
-            )}
-
-            {(activeTool === 'stego-encode') && (
-              <div style={{ marginTop: '0.9rem' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Mensagem secreta</label>
-                <textarea
-                  value={secretText}
-                  onChange={(e) => setSecretText(e.target.value)}
-                  className="input"
-                  rows={5}
-                  placeholder="Digite a mensagem para ocultar"
-                  disabled={busy}
-                />
-              </div>
-            )}
-
-            {(activeTool === 'stego-encode' || activeTool === 'stego-decode') && (
-              <div style={{ marginTop: '0.9rem' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.35rem' }}>Senha opcional</label>
-                <input
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="input"
-                  type="text"
-                  placeholder="Senha para proteger a mensagem"
-                  disabled={busy}
-                />
-              </div>
-            )}
-
-            {error && (
-              <div style={{ marginTop: '0.9rem', padding: '0.75rem', borderRadius: '0.6rem', border: '1px solid rgba(255,0,170,0.35)', background: 'rgba(255,0,170,0.12)', color: '#ff8ccd', fontSize: '0.82rem' }}>
-                {error}
-              </div>
-            )}
-
-            <div style={{ marginTop: '0.9rem', display: 'flex', gap: '0.6rem' }}>
-              <button type="button" className="btn btn-primary" onClick={runTool} disabled={busy || !file}>
-                {busy ? 'Processando...' : 'Executar Ferramenta'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => {
-                  setFile(null);
-                  setSecretText('');
-                  setPassword('');
-                  clearToolResults();
-                }}
-                disabled={busy}
-              >
-                Limpar
-              </button>
-            </div>
-          </div>
-
-          <div className="glass" style={{ borderRadius: '0.9rem', padding: '1rem' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.7rem' }}>Resultado</h3>
-
-            {previewUrl && (
-              <div style={{ marginBottom: '0.8rem' }}>
-                <Image
-                  src={previewUrl}
-                  alt="Prévia"
-                  width={1200}
-                  height={800}
-                  unoptimized
-                  style={{ width: '100%', height: '240px', borderRadius: '0.7rem', border: '1px solid var(--border-primary)', objectFit: 'contain', background: '#020617' }}
-                />
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.35rem' }}>
-                  {file?.name} • {file ? `${(file.size / 1024 / 1024).toFixed(2)} MB` : ''}
-                </p>
-              </div>
-            )}
-
-            {activeTool === 'metadata' && metadataResult && (
-              <div style={{ display: 'grid', gap: '0.7rem' }}>
-                <div style={{ fontSize: '0.82rem', color: metadataResult.success ? '#67e8f9' : '#ff8ccd' }}>
-                  {metadataResult.success ? 'Análise concluída' : metadataResult.error}
-                </div>
-                {metadataResult.success && (
-                  <pre className="card" style={{ margin: 0, padding: '0.9rem', fontSize: '0.75rem' }}>
-                    {JSON.stringify(metadataResult.metadata, null, 2)}
-                  </pre>
-                )}
-              </div>
-            )}
-
-            {activeTool === 'integrity' && integrityResult && (
-              <div style={{ display: 'grid', gap: '0.7rem' }}>
-                <div style={{ fontSize: '0.82rem', color: integrityResult.success ? '#67e8f9' : '#ff8ccd' }}>
-                  {integrityResult.success ? 'Integridade calculada' : integrityResult.error}
-                </div>
-                {integrityResult.summary && (
-                  <pre className="card" style={{ margin: 0, padding: '0.9rem', fontSize: '0.75rem' }}>
-                    {JSON.stringify(integrityResult.summary, null, 2)}
-                  </pre>
-                )}
-                {!!integrityResult.warnings?.length && (
-                  <ul style={{ listStyle: 'none', display: 'grid', gap: '0.35rem' }}>
-                    {integrityResult.warnings.map((warning, index) => (
-                      <li key={index} style={{ fontSize: '0.78rem', color: '#fda4af' }}>• {warning}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
-
-            {activeTool === 'inconsistency' && inconsistencyResult && (
-              <div style={{ display: 'grid', gap: '0.7rem' }}>
-                <div className="card" style={{ padding: '0.9rem' }}>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Risco geral</div>
-                  <div className="mono" style={{ fontSize: '1.15rem', color: '#00e5ff', fontWeight: 700 }}>
-                    {inconsistencyResult.overallRisk.toUpperCase()} ({inconsistencyResult.score}/100)
-                  </div>
-                </div>
-                <pre className="card" style={{ margin: 0, padding: '0.9rem', fontSize: '0.75rem' }}>
-                  {JSON.stringify(inconsistencyResult.inconsistencies.slice(0, 8), null, 2)}
-                </pre>
-              </div>
-            )}
-
-            {activeTool === 'ela' && elaResult && (
-              <div style={{ display: 'grid', gap: '0.8rem' }}>
-                <div className="card" style={{ padding: '0.9rem' }}>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Score de manipulação</div>
-                  <div className="mono" style={{ fontSize: '1.25rem', color: '#ff78d5', fontWeight: 700 }}>{elaResult.overallScore}/100</div>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>{elaResult.explanation}</p>
-                </div>
-                {elaResult.elaImage && (
-                  <Image
-                    src={elaResult.elaImage}
-                    alt="ELA"
-                    width={1200}
-                    height={800}
-                    unoptimized
-                    style={{ width: '100%', height: 'auto', borderRadius: '0.7rem', border: '1px solid var(--border-primary)' }}
-                  />
-                )}
-                {elaResult.heatmap && (
-                  <Image
-                    src={elaResult.heatmap}
-                    alt="Heatmap"
-                    width={1200}
-                    height={800}
-                    unoptimized
-                    style={{ width: '100%', height: 'auto', borderRadius: '0.7rem', border: '1px solid var(--border-primary)' }}
-                  />
-                )}
-              </div>
-            )}
-
-            {activeTool === 'stego-encode' && stegoEncodeResult && (
-              <div style={{ display: 'grid', gap: '0.8rem' }}>
-                <div style={{ fontSize: '0.82rem', color: '#67e8f9' }}>Mensagem ocultada com sucesso.</div>
-                {stegoEncodeResult.image && (
-                  <>
-                    <Image
-                      src={stegoEncodeResult.image}
-                      alt="Imagem com esteganografia"
-                      width={1200}
-                      height={800}
-                      unoptimized
-                      style={{ width: '100%', height: 'auto', borderRadius: '0.7rem', border: '1px solid var(--border-primary)' }}
-                    />
-                    <a href={stegoEncodeResult.image} download="stego-image.png" className="btn btn-secondary" style={{ width: 'fit-content' }}>
-                      Baixar imagem codificada
-                    </a>
-                  </>
-                )}
-                {stegoEncodeResult.stats && (
-                  <pre className="card" style={{ margin: 0, padding: '0.9rem', fontSize: '0.75rem' }}>
-                    {JSON.stringify(stegoEncodeResult.stats, null, 2)}
-                  </pre>
-                )}
-              </div>
-            )}
-
-            {activeTool === 'stego-decode' && stegoDecodeResult && (
-              <div className="card" style={{ padding: '0.9rem' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.45rem' }}>Mensagem extraída</div>
-                <pre style={{ margin: 0, fontSize: '0.82rem' }}>{stegoDecodeResult}</pre>
-              </div>
-            )}
-
-            {activeTool === 'stego-scan' && stegoScanResult && (
-              <div style={{ display: 'grid', gap: '0.7rem' }}>
-                <div className="card" style={{ padding: '0.9rem' }}>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Probabilidade de esteganografia</div>
-                  <div className="mono" style={{ fontSize: '1.2rem', color: stegoScanResult.suspicious ? '#ff8ccd' : '#67e8f9', fontWeight: 700 }}>
-                    {stegoScanResult.suspicious ? 'SUSPEITO' : 'BAIXO RISCO'} ({stegoScanResult.score}%)
-                  </div>
-                </div>
-                <ul style={{ listStyle: 'none', display: 'grid', gap: '0.35rem' }}>
-                  {stegoScanResult.indicators.map((indicator, index) => (
-                    <li key={index} style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>• {indicator}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {!file && (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                Selecione uma imagem e execute uma ferramenta para ver o resultado.
-              </p>
-            )}
-          </div>
-        </section>
-      </main>
-
-      <footer className="py-12" style={{ borderTop: '1px solid var(--border-primary)', background: 'var(--bg-secondary)' }}>
-        <div className="container">
-          <div style={{ textAlign: 'center', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-            <p className="mono">
-              Desenvolvido por:{' '}
-              <a
-                href="https://allananjos.dev.br/"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: 'var(--accent-primary)', textDecoration: 'none', fontWeight: 600 }}
-              >
-                Allan Anjos
-              </a>
-            </p>
+      {/* Sidebar */}
+      <aside className={`lab-sidebar ${isSidebarOpen ? 'open' : ''}`}>
+        <div style={{ padding: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.75rem', borderBottom: '1px solid var(--border-primary)' }}>
+          <Image src="/logo_atual.png" alt="TraceLab OSINT" width={40} height={40} />
+          <div>
+            <h1 className="mono" style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--accent-primary)' }}>TraceLab</h1>
+            <p className="text-xs text-muted">Forensic Workbench</p>
           </div>
         </div>
-      </footer>
+
+        <nav style={{ flex: 1, paddingBottom: '2rem' }}>
+          {categories.map(cat => (
+            <div key={cat}>
+              <div className="tool-category">{cat}</div>
+              {tools.filter(t => t.category === cat).map(tool => (
+                <button
+                  key={tool.id}
+                  className={`tool-btn ${activeTool === tool.id ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTool(tool.id);
+                    setIsSidebarOpen(false);
+                    clearToolResults();
+                  }}
+                >
+                  <span className="tool-icon">{tool.icon}</span>
+                  <span>{tool.name}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+
+        <div style={{ padding: '1.5rem', borderTop: '1px solid var(--border-primary)' }}>
+          <Link href="/dashboard" className="tool-btn" style={{ paddingLeft: 0 }}>
+            <span className="tool-icon">🏠</span>
+            <span>Voltar ao Dashboard</span>
+          </Link>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="lab-main">
+        <div className="container animate-in">
+          <header style={{ marginBottom: '2rem' }}>
+            <h2 className="text-2xl font-bold flex items-center gap-3">
+              <span style={{ fontSize: '2rem' }}>{selectedTool?.icon}</span>
+              {selectedTool?.name}
+            </h2>
+            <p className="text-muted" style={{ marginTop: '0.5rem' }}>{selectedTool?.desc}</p>
+          </header>
+
+          <div className="workspace-grid">
+            {/* INPUT PANEL */}
+            <div className="workspace-panel">
+              <h3 className="text-sm font-bold text-accent" style={{ marginBottom: '1rem', textTransform: 'uppercase' }}>Entrada de Dados</h3>
+
+              {activeTool === 'osint-user' ? (
+                <div>
+                  <label className="text-sm text-muted mb-2" style={{ display: 'block' }}>Username Alvo</label>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="Ex: allananjos"
+                    value={targetUsername}
+                    onChange={e => setTargetUsername(e.target.value)}
+                    disabled={busy}
+                  />
+                  <p className="text-xs text-muted mt-2">Gera links de pesquisa direta em múltiplas plataformas.</p>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-sm text-muted mb-2" style={{ display: 'block' }}>Arquivo Alvo</label>
+                  <div
+                    className="input"
+                    style={{
+                      height: '120px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderStyle: 'dashed',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <input
+                      type="file"
+                      onChange={e => {
+                        const f = e.target.files?.[0];
+                        if (f) {
+                          setFile(f);
+                          clearToolResults();
+                        }
+                      }}
+                      style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
+                      accept={(activeTool === 'strings' || activeTool === 'hex' || activeTool === 'integrity') ? '*/*' : 'image/*'}
+                      disabled={busy}
+                    />
+                    {file ? (
+                      <>
+                        <span style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📄</span>
+                        <span className="text-sm font-medium">{file.name}</span>
+                        <span className="text-xs text-muted">{(file.size / 1024).toFixed(2)} KB</span>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: '2rem', marginBottom: '0.5rem', opacity: 0.5 }}>📤</span>
+                        <span className="text-sm text-muted">Clique ou arraste um arquivo</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Tool Specific Controls */}
+              <div style={{ marginTop: '1.5rem', display: 'grid', gap: '1rem' }}>
+                {activeTool === 'ela' && (
+                  <div>
+                    <label className="text-sm text-muted mb-2" style={{ display: 'block' }}>Qualidade ({quality}%)</label>
+                    <input type="range" min="50" max="100" value={quality} onChange={e => setQuality(Number(e.target.value))} style={{ width: '100%' }} />
+                  </div>
+                )}
+
+                {activeTool === 'strings' && (
+                  <div>
+                    <label className="text-sm text-muted mb-2" style={{ display: 'block' }}>Tamanho Mínimo ({minLength} chars)</label>
+                    <input type="number" min="3" max="50" value={minLength} onChange={e => setMinLength(Number(e.target.value))} className="input" />
+                  </div>
+                )}
+
+                {(activeTool === 'stego-encode') && (
+                  <>
+                    <textarea
+                      className="input"
+                      rows={4}
+                      placeholder="Mensagem secreta..."
+                      value={secretText}
+                      onChange={e => setSecretText(e.target.value)}
+                    />
+                    <input
+                      type="password"
+                      className="input"
+                      placeholder="Senha (Opcional)"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                    />
+                  </>
+                )}
+                {(activeTool === 'stego-decode') && (
+                  <input
+                    type="password"
+                    className="input"
+                    placeholder="Senha (se houver)"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                  />
+                )}
+
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
+                  <button className="btn btn-primary" onClick={runTool} disabled={busy} style={{ flex: 1 }}>
+                    {busy ? 'Processando...' : 'Executar Análise'}
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => { setFile(null); clearToolResults(); setTargetUsername(''); }}>
+                    Limpar
+                  </button>
+                </div>
+
+                {error && (
+                  <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+                    {error}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* RESULTS PANEL */}
+            <div className="workspace-panel" style={{ minHeight: '400px' }}>
+              <h3 className="text-sm font-bold text-accent" style={{ marginBottom: '1rem', textTransform: 'uppercase' }}>Resultados</h3>
+
+              {/* Default Preview */}
+              {previewUrl && !activeTool.match(/hex|strings|integrity|osint-user/) && (
+                <div style={{ marginBottom: '1.5rem', borderRadius: '0.5rem', overflow: 'hidden', border: '1px solid var(--border-primary)', background: '#000' }}>
+                  <Image
+                    src={previewUrl}
+                    alt="Preview"
+                    width={800}
+                    height={400}
+                    style={{ width: '100%', height: 'auto', maxHeight: '300px', objectFit: 'contain', background: '#020617' }}
+                    unoptimized
+                  />
+                </div>
+              )}
+
+              {/* Result Content Area */}
+              <div className="result-content">
+                {/* Metadata */}
+                {activeTool === 'metadata' && metadataResult && (
+                  <div className="space-y-4">
+                    <div className={`p-4 rounded border ${metadataResult.riskLevel === 'high' ? 'border-red-500 bg-red-500/10' : 'border-green-500 bg-green-500/10'}`}>
+                      <div className="font-bold mb-2">Análise de Risco: {metadataResult.riskLevel?.toUpperCase()}</div>
+                      {metadataResult.warnings?.map((w, i) => <div key={i} className="text-xs opacity-80">• {w}</div>)}
+                    </div>
+                    <pre className="text-xs p-4 bg-black/30 rounded overflow-auto max-h-[400px]">
+                      {JSON.stringify(metadataResult.metadata, null, 2)}
+                    </pre>
+                  </div>
+                )}
+
+                {/* OSINT */}
+                {activeTool === 'osint-user' && osintResult && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.75rem' }}>
+                    {osintResult.map(p => (
+                      <a
+                        key={p.name}
+                        href={p.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="card"
+                        style={{ padding: '0.75rem', textDecoration: 'none', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}
+                      >
+                        <span className="font-bold text-sm text-white">{p.name}</span>
+                        <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded">{p.category}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+
+                {/* Hex Viewer */}
+                {activeTool === 'hex' && hexResult && (
+                  <div>
+                    <div className="flex justify-between items-center mb-4 text-xs font-mono text-accent">
+                      <span>OFFSET: {hexResult.offset.toString(16).toUpperCase()}</span>
+                      <div className="flex gap-2">
+                        <button className="btn btn-secondary py-1 px-3 text-xs" onClick={() => handleHexPage('prev')} disabled={hexOffset === 0}>ANTERIOR</button>
+                        <button className="btn btn-secondary py-1 px-3 text-xs" onClick={() => handleHexPage('next')}>PRÓXIMO</button>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto bg-black/40 p-2 rounded border border-border-primary">
+                      <table className="hex-table">
+                        <tbody>
+                          {hexResult.hex.map((line, i) => (
+                            <tr key={i}>
+                              <td className="hex-offset">{((hexResult.offset + i * 16).toString(16)).padStart(8, '0').toUpperCase()}</td>
+                              <td className="text-green-400 whitespace-pre font-mono">{line}</td>
+                              <td className="hex-ascii whitespace-pre">{hexResult.ascii[i]}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Bit Plane */}
+                {activeTool === 'bitplane' && bitPlaneResult && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {bitPlaneResult.planes?.map((p) => (
+                      <div key={p.bit} className="bg-black/40 p-2 rounded border border-border-primary text-center">
+                        <div className="text-xs mb-1 text-muted">Bit {p.bit}</div>
+                        <Image src={p.image} alt="Plane" width={150} height={150} className="w-full h-auto" unoptimized />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Strings */}
+                {activeTool === 'strings' && stringsResult && (
+                  <div>
+                    <div className="text-sm text-accent mb-2">Strings encontradas: {stringsResult.totalFound}</div>
+                    <pre className="text-xs p-4 bg-black/30 rounded overflow-auto max-h-[500px] whitespace-pre-wrap text-green-400 font-mono">
+                      {stringsResult.strings?.join('\n')}
+                    </pre>
+                  </div>
+                )}
+
+                {/* Integrity */}
+                {activeTool === 'integrity' && integrityResult && integrityResult.summary && (
+                  <div className="space-y-4">
+                    <div className="p-4 bg-black/30 rounded border border-border-primary">
+                      <div className="text-xs text-muted">SHA-256 Hash</div>
+                      <div className="text-xs font-mono text-accent break-all">{integrityResult.summary.sha256}</div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-3 bg-black/30 rounded">
+                        <div className="text-xs text-muted">Entropia</div>
+                        <div className="text-sm font-bold">{integrityResult.summary.entropy?.toFixed(4)}</div>
+                      </div>
+                      <div className="p-3 bg-black/30 rounded">
+                        <div className="text-xs text-muted">Magic Bytes</div>
+                        <div className="text-sm font-mono text-green-400">{integrityResult.summary.magicBytes}</div>
+                      </div>
+                    </div>
+                    {integrityResult.warnings && integrityResult.warnings.length > 0 && (
+                      <div className="p-3 bg-red-500/10 border border-red-500/20 rounded">
+                        <div className="text-xs font-bold text-red-400 mb-2">Avisos de Integridade:</div>
+                        {integrityResult.warnings.map(w => <div key={w} className="text-xs text-red-300">• {w}</div>)}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Inconsistency */}
+                {activeTool === 'inconsistency' && inconsistencyResult && (
+                  <div className="space-y-4">
+                    <div className={`p-4 rounded border ${inconsistencyResult.score > 50 ? 'border-red-500 bg-red-500/10' : 'border-green-500 bg-green-500/10'}`}>
+                      <div className="text-xs text-muted">Risco Geral</div>
+                      <div className="text-2xl font-bold">{inconsistencyResult.overallRisk.toUpperCase()} ({inconsistencyResult.score}/100)</div>
+                    </div>
+                    <pre className="text-xs p-4 bg-black/30 rounded overflow-auto max-h-[400px]">
+                      {JSON.stringify(inconsistencyResult.inconsistencies.slice(0, 8), null, 2)}
+                    </pre>
+                  </div>
+                )}
+
+                {/* ELA */}
+                {activeTool === 'ela' && elaResult && (
+                  <div className="space-y-4">
+                    <div className="text-center p-4 bg-black/30 rounded">
+                      <div className="text-xs text-muted">Pontuação ELA</div>
+                      <div className="text-3xl font-bold text-accent">{elaResult.overallScore}/100</div>
+                      <p className="text-xs text-muted mt-2">{elaResult.explanation}</p>
+                    </div>
+                    {elaResult.elaImage && <Image src={elaResult.elaImage} alt="ELA" width={600} height={400} className="w-full rounded border border-border-primary" unoptimized />}
+                  </div>
+                )}
+
+                {/* Stego Encode/Decode/Scan */}
+                {activeTool === 'stego-scan' && stegoScanResult && (
+                  <div className="p-6 text-center">
+                    <div className="text-sm text-muted">Probabilidade</div>
+                    <div className="text-4xl font-bold my-2" style={{ color: stegoScanResult.suspicious ? '#ff4444' : '#00cc00' }}>{stegoScanResult.score}%</div>
+                    <div className="text-xs text-muted">{stegoScanResult.suspicious ? 'Alta probabilidade de esteganografia' : 'Baixa probabilidade'}</div>
+                    <ul className="text-left mt-4 space-y-2">
+                      {stegoScanResult.indicators.map(i => <li key={i} className="text-xs text-yellow-400">• {i}</li>)}
+                    </ul>
+                  </div>
+                )}
+
+                {activeTool === 'stego-encode' && stegoEncodeResult?.image && (
+                  <div className="text-center space-y-4">
+                    <div className="text-green-400 text-sm font-bold">Mensagem Ocultada!</div>
+                    <Image src={stegoEncodeResult.image} alt="Encoded" width={400} height={300} className="w-full max-w-[300px] mx-auto rounded border border-border-primary" unoptimized />
+                    <a href={stegoEncodeResult.image} download="secret_image.png" className="btn btn-primary w-full">Baixar Imagem</a>
+                  </div>
+                )}
+
+                {activeTool === 'stego-decode' && stegoDecodeResult && (
+                  <div className="p-4 bg-green-500/10 border border-green-500/30 rounded">
+                    <div className="text-xs text-green-400 mb-2 font-bold">MENSAGEM DECIFRADA:</div>
+                    <div className="text-lg text-white font-mono break-words">{stegoDecodeResult}</div>
+                  </div>
+                )}
+
+                {!file && !activeTool.includes('osint') && !metadataResult && !osintResult && (
+                  <div className="flex flex-col items-center justify-center h-[200px] opacity-30">
+                    <span style={{ fontSize: '3rem' }}>🧪</span>
+                    <p className="text-sm mt-2">Aguardando análise...</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

@@ -10,6 +10,7 @@ export interface IntegrityResult {
         entropy: number;
         riskScore: number;
         riskLevel: 'low' | 'medium' | 'high';
+        magicBytes?: string;
     };
     warnings?: string[];
     error?: string;
@@ -67,7 +68,8 @@ export async function analyzeIntegrity(file: File): Promise<IntegrityResult> {
                 extensionMatchesMagic,
                 entropy: Number(entropy.toFixed(3)),
                 riskScore,
-                riskLevel
+                riskLevel,
+                magicBytes: Array.from(bytes.slice(0, 8)).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')
             },
             warnings
         };

@@ -347,7 +347,7 @@ export default function ChallengesPage() {
                         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', textDecoration: 'none' }}>
                             <Image src="/logo_atual.png" alt="TraceLab OSINT" width={80} height={80} className="brand-logo" />
                         </Link>
-                        <span className="mono" style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-primary)' }}>Desafios CTF</span>
+                        <span className="mono header-title-mobile" style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-primary)' }}>Desafios CTF</span>
                     </div>
                     <nav className="mobile-nav">
                         <Link href="/dashboard" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.875rem' }}>Dashboard</Link>
@@ -385,12 +385,14 @@ export default function ChallengesPage() {
                 </div>
 
                 {/* Category Filter */}
-                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+                <div className="scroll-x-container" style={{ marginBottom: '1.5rem' }}>
                     {categories.map((cat) => (
                         <button
                             key={cat.id}
                             onClick={() => setFilter(cat.id)}
+                            className="snap-center"
                             style={{
+                                whiteSpace: 'nowrap', flexShrink: 0,
                                 padding: '0.5rem 1rem', borderRadius: '0.5rem', border: '1px solid',
                                 borderColor: filter === cat.id ? '#00ff88' : 'var(--border-primary)',
                                 background: filter === cat.id ? 'rgba(0, 255, 136, 0.1)' : 'transparent',

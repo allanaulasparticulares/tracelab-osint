@@ -99,8 +99,8 @@ export default function DashboardPage() {
               <Image src="/logo_atual.png" alt="TraceLab OSINT" width={80} height={80} className="brand-logo" />
             </Link>
             <div>
-              <span className="mono" style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-primary)' }}>Dashboard</span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>/ Painel</span>
+              <span className="mono header-title-mobile" style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--accent-primary)' }}>Dashboard</span>
+              <span className="header-hide-mobile" style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginLeft: '0.5rem' }}>/ Painel</span>
             </div>
           </div>
           <nav className="mobile-nav">
@@ -120,7 +120,7 @@ export default function DashboardPage() {
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>Explore ferramentas de análise forense digital e aprenda OSINT na prática.</p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+        <div className="stats-grid" style={{ marginBottom: '2rem' }}>
           {[
             { icon: '📊', label: 'Total Análises', val: stats.totalAnalyses, c: '#00e5ff' },
             { icon: '🔍', label: 'Metadata', val: stats.metadataScans, c: '#3b82f6' },

@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import SessionActivity from '@/components/session-activity';
 
+import BottomNav from '@/components/BottomNav';
+
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -24,6 +26,7 @@ export default function RootLayout({
       <body>
         <SessionActivity />
         {children}
+        <BottomNav />
       </body>
     </html>
   );
