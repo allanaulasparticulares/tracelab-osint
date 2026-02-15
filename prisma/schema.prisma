@@ -1,12 +1,11 @@
-/**
- * Prisma Schema - TraceLab OSINT
- * 
- * Sistema de autenticação híbrido:
- * - Login identificado (usuário com conta)
- * - Login anônimo (sessão temporária)
- * 
- * Filosofia: Autenticação ≠ Vigilância
- */
+// Prisma Schema - TraceLab OSINT
+//
+// Sistema de autenticação híbrido:
+// - Login identificado (usuário com conta)
+// - Login anônimo (sessão temporária)
+//
+// Filosofia: Autenticação ≠ Vigilância
+
 
 generator client {
   provider = "prisma-client-js"

@@ -37,12 +37,6 @@ export function resolveWebAuthnPolicy(input: {
   const expectedOrigin = resolveOrigin(input.originHeader, input.hostHeader);
   const allowedOrigins = parseAllowedOrigins(expectedOrigin);
 
-  if (process.env.NODE_ENV === 'production') {
-    if (!process.env.WEBAUTHN_RP_ID || !process.env.WEBAUTHN_ORIGIN) {
-      throw new Error('Configure WEBAUTHN_RP_ID e WEBAUTHN_ORIGIN em produção.');
-    }
-  }
-
   return { rpId, expectedOrigin, allowedOrigins };
 }
 

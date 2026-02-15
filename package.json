@@ -4,12 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
-    "@prisma/client": "^7.4.0",
+    "@prisma/client": "^5.16.0",
     "@supabase/supabase-js": "^2.95.3",
     "crypto-js": "^4.2.0",
     "html2canvas": "^1.4.1",
@@ -19,7 +19,7 @@
     "nodemailer": "^6.10.1",
     "pako": "^2.1.0",
     "piexifjs": "^1.0.6",
-    "prisma": "^7.4.0",
+    "prisma": "^5.16.0",
     "qrcode-terminal": "^0.12.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",

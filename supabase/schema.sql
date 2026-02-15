@@ -25,11 +25,13 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
 -- RLS (Row Level Security)
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own profile" ON public.user_profiles;
 CREATE POLICY "Users can view own profile"
   ON public.user_profiles
   FOR SELECT
   USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
 CREATE POLICY "Users can update own profile"
   ON public.user_profiles
   FOR UPDATE
@@ -57,6 +59,7 @@ CREATE INDEX IF NOT EXISTS idx_anonymous_sessions_expires_at ON public.anonymous
 ALTER TABLE public.anonymous_sessions ENABLE ROW LEVEL SECURITY;
 
 -- Permitir leitura apenas da própria sessão (via token no JWT)
+DROP POLICY IF EXISTS "Anonymous users can view own session" ON public.anonymous_sessions;
 CREATE POLICY "Anonymous users can view own session"
   ON public.anonymous_sessions
   FOR SELECT
@@ -82,11 +85,13 @@ CREATE INDEX IF NOT EXISTS idx_activity_logs_timestamp ON public.activity_logs(t
 -- RLS
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own logs" ON public.activity_logs;
 CREATE POLICY "Users can view own logs"
   ON public.activity_logs
   FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own logs" ON public.activity_logs;
 CREATE POLICY "Users can insert own logs"
   ON public.activity_logs
   FOR INSERT
@@ -109,6 +114,7 @@ CREATE INDEX IF NOT EXISTS idx_anonymous_activity_logs_session_id ON public.anon
 -- RLS
 ALTER TABLE public.anonymous_activity_logs ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anonymous users can view own logs" ON public.anonymous_activity_logs;
 CREATE POLICY "Anonymous users can view own logs"
   ON public.anonymous_activity_logs
   FOR SELECT
@@ -135,6 +141,7 @@ CREATE TABLE IF NOT EXISTS public.challenges (
 -- RLS
 ALTER TABLE public.challenges ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can view active challenges" ON public.challenges;
 CREATE POLICY "Anyone can view active challenges"
   ON public.challenges
   FOR SELECT
@@ -159,11 +166,13 @@ CREATE INDEX IF NOT EXISTS idx_challenge_completions_user_id ON public.challenge
 -- RLS
 ALTER TABLE public.challenge_completions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own completions" ON public.challenge_completions;
 CREATE POLICY "Users can view own completions"
   ON public.challenge_completions
   FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can insert own completions" ON public.challenge_completions;
 CREATE POLICY "Users can insert own completions"
   ON public.challenge_completions
   FOR INSERT
@@ -189,11 +198,13 @@ CREATE TABLE IF NOT EXISTS public.user_stats (
 -- RLS
 ALTER TABLE public.user_stats ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can view own stats" ON public.user_stats;
 CREATE POLICY "Users can view own stats"
   ON public.user_stats
   FOR SELECT
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update own stats" ON public.user_stats;
 CREATE POLICY "Users can update own stats"
   ON public.user_stats
   FOR UPDATE
@@ -227,6 +238,52 @@ CREATE TABLE IF NOT EXISTS public.app_user_progress (
   completed_challenge_ids JSONB DEFAULT '[]'::jsonb
 );
 
+CREATE TABLE IF NOT EXISTS public.app_passkey_users (
+  email TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.app_passkey_credentials (
+  credential_id TEXT PRIMARY KEY,
+  email TEXT NOT NULL REFERENCES public.app_passkey_users(email) ON DELETE CASCADE,
+  public_key_pem TEXT NOT NULL,
+  algorithm INTEGER NOT NULL,
+  counter BIGINT DEFAULT 0,
+  transports JSONB DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_passkey_credentials_email
+  ON public.app_passkey_credentials(email);
+
+CREATE TABLE IF NOT EXISTS public.app_passkey_challenges (
+  email TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('register', 'login')),
+  challenge TEXT NOT NULL,
+  rp_id TEXT NOT NULL,
+  origin TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  PRIMARY KEY (email, type)
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_passkey_challenges_expires_at
+  ON public.app_passkey_challenges(expires_at);
+
+CREATE TABLE IF NOT EXISTS public.app_sessions (
+  id UUID PRIMARY KEY,
+  email TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  last_activity_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_sessions_email ON public.app_sessions(email);
+CREATE INDEX IF NOT EXISTS idx_app_sessions_expires_at ON public.app_sessions(expires_at);
+
 CREATE OR REPLACE FUNCTION update_app_user_profiles_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -255,6 +312,18 @@ CREATE TRIGGER trg_update_app_user_progress_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_app_user_progress_updated_at();
 
+DROP TRIGGER IF EXISTS trg_update_app_passkey_users_updated_at ON public.app_passkey_users;
+CREATE TRIGGER trg_update_app_passkey_users_updated_at
+  BEFORE UPDATE ON public.app_passkey_users
+  FOR EACH ROW
+  EXECUTE FUNCTION update_app_user_profiles_updated_at();
+
+DROP TRIGGER IF EXISTS trg_update_app_passkey_credentials_updated_at ON public.app_passkey_credentials;
+CREATE TRIGGER trg_update_app_passkey_credentials_updated_at
+  BEFORE UPDATE ON public.app_passkey_credentials
+  FOR EACH ROW
+  EXECUTE FUNCTION update_app_user_profiles_updated_at();
+
 -- ============================================
 -- FUNÇÕES E TRIGGERS
 -- ============================================
@@ -269,6 +338,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger para user_profiles
+DROP TRIGGER IF EXISTS update_user_profiles_updated_at ON public.user_profiles;
 CREATE TRIGGER update_user_profiles_updated_at
   BEFORE UPDATE ON public.user_profiles
   FOR EACH ROW
@@ -289,6 +359,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Trigger para criar perfil após signup
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
@@ -363,6 +434,10 @@ COMMENT ON TABLE public.anonymous_activity_logs IS 'Logs agregados de sessões a
 COMMENT ON TABLE public.challenges IS 'Desafios CTF educacionais';
 COMMENT ON TABLE public.challenge_completions IS 'Registro de desafios completados por usuários';
 COMMENT ON TABLE public.user_stats IS 'Estatísticas agregadas para dashboard de progresso';
+COMMENT ON TABLE public.app_passkey_users IS 'Usuários da autenticação customizada por passkey.';
+COMMENT ON TABLE public.app_passkey_credentials IS 'Credenciais WebAuthn persistidas para login por passkey.';
+COMMENT ON TABLE public.app_passkey_challenges IS 'Desafios temporários de registro/login WebAuthn.';
+COMMENT ON TABLE public.app_sessions IS 'Sessões autenticadas do app para rotas protegidas.';
 
 -- ============================================
 -- CONFIGURAÇÃO DE CRON JOBS (Supabase Edge Functions)
