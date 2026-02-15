@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { consumePasskeyChallenge, upsertPasskeyCredential } from '@/lib/server/passkey-store';
 import { isAllowedOrigin, parseClientData, resolveWebAuthnPolicy, spkiBase64ToPem } from '@/lib/server/webauthn';
+import { upsertUserProfile } from '@/lib/server/user-profile-store';
 
 export const runtime = 'nodejs';
 
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
       algorithm,
       transports,
     });
+    await upsertUserProfile({ email, displayName });
 
     return NextResponse.json({ success: true });
   } catch {

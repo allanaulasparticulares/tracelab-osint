@@ -19,8 +19,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   name TEXT NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  last_login_at TIMESTAMPTZ,
-  CONSTRAINT user_profiles_pkey PRIMARY KEY (id)
+  last_login_at TIMESTAMPTZ
 );
 
 -- RLS (Row Level Security)
@@ -199,6 +198,62 @@ CREATE POLICY "Users can update own stats"
   ON public.user_stats
   FOR UPDATE
   USING (auth.uid() = user_id);
+
+-- ============================================
+-- TABELAS APP (AUTH CUSTOMIZADA POR EMAIL)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS public.app_user_profiles (
+  email TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  last_login_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS public.app_user_progress (
+  email TEXT PRIMARY KEY,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  total_analyses INTEGER DEFAULT 0,
+  metadata_scans INTEGER DEFAULT 0,
+  stego_tests INTEGER DEFAULT 0,
+  ela_analyses INTEGER DEFAULT 0,
+  scanner_runs INTEGER DEFAULT 0,
+  integrity_checks INTEGER DEFAULT 0,
+  challenges_completed INTEGER DEFAULT 0,
+  total_points INTEGER DEFAULT 0,
+  learning_score INTEGER DEFAULT 0 CHECK (learning_score >= 0 AND learning_score <= 100),
+  completed_challenge_ids JSONB DEFAULT '[]'::jsonb
+);
+
+CREATE OR REPLACE FUNCTION update_app_user_profiles_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_update_app_user_profiles_updated_at ON public.app_user_profiles;
+CREATE TRIGGER trg_update_app_user_profiles_updated_at
+  BEFORE UPDATE ON public.app_user_profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION update_app_user_profiles_updated_at();
+
+CREATE OR REPLACE FUNCTION update_app_user_progress_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_update_app_user_progress_updated_at ON public.app_user_progress;
+CREATE TRIGGER trg_update_app_user_progress_updated_at
+  BEFORE UPDATE ON public.app_user_progress
+  FOR EACH ROW
+  EXECUTE FUNCTION update_app_user_progress_updated_at();
 
 -- ============================================
 -- FUNÇÕES E TRIGGERS

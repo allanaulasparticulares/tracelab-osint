@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { consumePasskeyChallenge, getCredentialForUser, updateCredentialCounter } from '@/lib/server/passkey-store';
+import { consumePasskeyChallenge, getCredentialForUser, getPasskeyUser, updateCredentialCounter } from '@/lib/server/passkey-store';
 import { isAllowedOrigin, parseClientData, resolveWebAuthnPolicy, verifyAuthenticatorAssertion } from '@/lib/server/webauthn';
 import { createSession } from '@/lib/server/session-store';
+import { upsertUserProfile } from '@/lib/server/user-profile-store';
 
 export const runtime = 'nodejs';
 const SESSION_MAX_AGE_SECONDS = 60 * 60; // 1 hora
@@ -14,6 +15,7 @@ export async function POST(req: NextRequest) {
     });
     const body = await req.json();
     const email = String(body?.email || '').trim().toLowerCase();
+    const requestedDisplayName = String(body?.displayName || '').trim();
     const credentialId = String(body?.credentialId || '');
     const clientDataJson = String(body?.clientDataJson || '');
     const authenticatorData = String(body?.authenticatorData || '');
@@ -81,15 +83,34 @@ export async function POST(req: NextRequest) {
     }
 
     await updateCredentialCounter(email, credentialId, verification.counter);
+    const passkeyUser = await getPasskeyUser(email);
+    const resolvedDisplayName =
+      requestedDisplayName ||
+      String(passkeyUser?.displayName || '').trim() ||
+      email.split('@')[0] ||
+      'Investigador';
+
+    const persistedDisplayName = await upsertUserProfile({
+      email,
+      displayName: resolvedDisplayName,
+      markLogin: true,
+    });
 
     const sessionId = await createSession(email, SESSION_MAX_AGE_SECONDS);
-    const response = NextResponse.json({ success: true });
+    const response = NextResponse.json({ success: true, displayName: persistedDisplayName });
     response.cookies.set('tracelab_session', sessionId, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
       maxAge: SESSION_MAX_AGE_SECONDS,
+    });
+    response.cookies.set('tracelab_user_name', persistedDisplayName, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 30,
     });
 
     return response;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/server/session-store';
 import { getUserProgress } from '@/lib/server/progress-store';
+import { getUserProfileName } from '@/lib/server/user-profile-store';
 
 export const runtime = 'nodejs';
 
@@ -18,5 +19,6 @@ export async function GET(req: NextRequest) {
   }
 
   const progress = await getUserProgress(session.email);
-  return NextResponse.json({ success: true, progress });
+  const userName = await getUserProfileName(session.email);
+  return NextResponse.json({ success: true, progress, userName });
 }

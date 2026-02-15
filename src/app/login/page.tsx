@@ -117,6 +117,7 @@ export default function LoginPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: normalizeEmail(email),
+          displayName: displayName.trim() || String(optionsData?.userDisplayName || '').trim(),
           credentialId: toBase64Url(assertion.rawId),
           authenticatorData: toBase64Url(response.authenticatorData),
           clientDataJson: toBase64Url(response.clientDataJSON),
@@ -130,6 +131,7 @@ export default function LoginPage() {
 
       if (typeof window !== 'undefined') {
         const preferredName =
+          String(verifyData?.displayName || '').trim() ||
           displayName.trim() ||
           String(optionsData?.userDisplayName || '').trim() ||
           normalizeEmail(email).split('@')[0];

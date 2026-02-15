@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 
 export default function DashboardPage() {
-  const [userName] = useState(() => {
+  const [userName, setUserName] = useState(() => {
     if (typeof window === 'undefined') return 'Investigador';
     const storedName = window.localStorage.getItem('tracelab_user_name');
     const storedEmail = window.localStorage.getItem('tracelab_user_email');
@@ -45,6 +45,12 @@ export default function DashboardPage() {
           learningScore: number;
           completedChallengeIds?: string[];
         };
+        const profileName = String(data?.userName || '').trim();
+        if (profileName) {
+          setUserName(profileName);
+          window.localStorage.setItem('tracelab_user_name', profileName);
+          document.cookie = `tracelab_user_name=${encodeURIComponent(profileName)}; Path=/; Max-Age=${60 * 60 * 24 * 30}; SameSite=Lax`;
+        }
 
         setStats({
           totalAnalyses: progress.totalAnalyses || 0,
