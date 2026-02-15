@@ -55,18 +55,53 @@ export default function BottomNav() {
     ];
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 border-t border-gray-800 md:hidden safe-area-bottom">
-            <div className="flex justify-around items-center h-16">
+        <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden safe-area-bottom" style={{ 
+            background: 'rgba(11, 15, 26, 0.95)', 
+            backdropFilter: 'blur(12px)',
+            borderTop: '1px solid var(--border-primary)',
+            boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.3)'
+        }}>
+            <div className="flex justify-around items-center" style={{ height: '64px', paddingBottom: 'env(safe-area-inset-bottom, 0)' }}>
                 {navItems.map((item) => (
                     <Link
                         key={item.href}
                         href={item.href}
-                        className={`flex flex-col items-center justify-center w-full h-full space-y-1 text-xs font-medium transition-colors ${isActive(item.href) && item.href !== '/api/auth/logout'
-                            ? 'text-cyan-400'
-                            : item.className || 'text-gray-400 hover:text-cyan-400'
+                        className={`flex flex-col items-center justify-center w-full h-full transition-all ${isActive(item.href) && item.href !== '/api/auth/logout'
+                            ? ''
+                            : item.className || ''
                             }`}
+                        style={{
+                            color: isActive(item.href) && item.href !== '/api/auth/logout' 
+                                ? 'var(--accent-primary)' 
+                                : item.href === '/api/auth/logout' 
+                                    ? '#ff5dc3' 
+                                    : 'var(--text-muted)',
+                            gap: '0.25rem',
+                            fontSize: '0.7rem',
+                            fontWeight: 500,
+                            textDecoration: 'none',
+                            padding: '0.5rem',
+                            position: 'relative'
+                        }}
                     >
-                        <span className={`${isActive(item.href) ? 'scale-110' : ''} transition-transform duration-200`}>
+                        {isActive(item.href) && item.href !== '/api/auth/logout' && (
+                            <div style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                width: '32px',
+                                height: '3px',
+                                background: 'var(--accent-primary)',
+                                borderRadius: '0 0 3px 3px',
+                                boxShadow: '0 0 8px var(--accent-primary)'
+                            }} />
+                        )}
+                        <span style={{ 
+                            transform: isActive(item.href) ? 'scale(1.1)' : 'scale(1)', 
+                            transition: 'transform 0.2s',
+                            filter: isActive(item.href) && item.href !== '/api/auth/logout' ? 'drop-shadow(0 0 4px var(--accent-primary))' : 'none'
+                        }}>
                             {item.icon}
                         </span>
                         <span>{item.label}</span>

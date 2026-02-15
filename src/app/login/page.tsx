@@ -152,24 +152,24 @@ export default function LoginPage() {
       <div style={{ position: 'fixed', top: '10%', left: '5%', width: '300px', height: '300px', background: 'rgba(168, 85, 247, 0.07)', borderRadius: '50%', filter: 'blur(80px)' }} />
       <div style={{ position: 'fixed', bottom: '10%', right: '5%', width: '400px', height: '400px', background: 'rgba(0, 229, 255, 0.07)', borderRadius: '50%', filter: 'blur(80px)' }} />
 
-      <div style={{ width: '100%', maxWidth: '900px', margin: '0 auto', padding: '2rem 1.25rem', position: 'relative', zIndex: 10 }}>
+      <div style={{ width: '100%', maxWidth: '900px', margin: '0 auto', padding: 'clamp(1.5rem, 4vw, 2rem) 1rem', position: 'relative', zIndex: 10 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div style={{ width: '100%', maxWidth: '560px', margin: '0 auto' }}>
-            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
-              <Link href="/" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
-                <Image src="/logo_atual.png" alt="TraceLab OSINT" width={96} height={96} className="brand-logo" />
-                <span className="mono" style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--accent-primary)' }}>
+            <div style={{ textAlign: 'center', marginBottom: 'clamp(1rem, 3vw, 1.25rem)' }}>
+              <Link href="/" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 'clamp(0.5rem, 2vw, 0.75rem)', justifyContent: 'center' }}>
+                <Image src="/logo_atual.png" alt="TraceLab OSINT" width={96} height={96} style={{ width: 'clamp(60px, 15vw, 96px)', height: 'clamp(60px, 15vw, 96px)', objectFit: 'contain' }} />
+                <span className="mono" style={{ fontSize: 'clamp(1.25rem, 4vw, 1.5rem)', fontWeight: 700, color: 'var(--accent-primary)', lineHeight: 1.2 }}>
                   TraceLab
                 </span>
               </Link>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginTop: '0.75rem' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: 'clamp(0.8rem, 2vw, 0.875rem)', marginTop: '0.75rem', lineHeight: 1.4 }}>
                 Login com Passkey (WebAuthn)
               </p>
             </div>
 
-            <div className="glass" style={{ borderRadius: '1rem', padding: '1.25rem', border: '1px solid var(--border-primary)' }}>
-              <div style={{ marginBottom: '0.9rem' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 500 }}>
+            <div className="glass" style={{ borderRadius: 'clamp(0.75rem, 2vw, 1rem)', padding: 'clamp(1.1rem, 3vw, 1.5rem)', border: '1px solid var(--border-primary)' }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: 'clamp(0.75rem, 2vw, 0.8rem)', color: 'var(--text-secondary)', marginBottom: '0.5rem', fontWeight: 500 }}>
                   Email
                 </label>
                 <input
@@ -179,11 +179,12 @@ export default function LoginPage() {
                   placeholder="seu@email.com"
                   className="input"
                   disabled={loading}
+                  style={{ fontSize: '16px' }}
                 />
               </div>
 
-              <div style={{ marginBottom: '0.9rem' }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 500 }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: 'clamp(0.75rem, 2vw, 0.8rem)', color: 'var(--text-secondary)', marginBottom: '0.5rem', fontWeight: 500 }}>
                   Nome de exibição (opcional)
                 </label>
                 <input
@@ -193,6 +194,7 @@ export default function LoginPage() {
                   placeholder="Analista"
                   className="input"
                   disabled={loading}
+                  style={{ fontSize: '16px' }}
                 />
               </div>
 
@@ -224,13 +226,13 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <div style={{ display: 'grid', gap: '0.55rem' }}>
+              <div style={{ display: 'grid', gap: '0.65rem' }}>
                 <button
                   type="button"
                   onClick={loginWithPasskey}
                   disabled={loading}
                   className="btn btn-primary"
-                  style={{ width: '100%', padding: '0.9rem' }}
+                  style={{ width: '100%', padding: 'clamp(0.875rem, 2.5vw, 1rem)', fontSize: 'clamp(0.875rem, 2vw, 1rem)' }}
                 >
                   {loading ? '⏳ Autenticando...' : '🔐 Entrar com Passkey'}
                 </button>
@@ -239,7 +241,7 @@ export default function LoginPage() {
                   onClick={registerPasskey}
                   disabled={loading}
                   className="btn btn-secondary"
-                  style={{ width: '100%', padding: '0.85rem' }}
+                  style={{ width: '100%', padding: 'clamp(0.875rem, 2.5vw, 1rem)', fontSize: 'clamp(0.875rem, 2vw, 1rem)' }}
                 >
                   {loading ? '⏳ Registrando...' : '➕ Registrar Passkey'}
                 </button>
@@ -252,8 +254,8 @@ export default function LoginPage() {
               )}
             </div>
 
-            <div style={{ textAlign: 'center', marginTop: '1.2rem' }}>
-              <Link href="/" style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textDecoration: 'none' }}>
+            <div style={{ textAlign: 'center', marginTop: '1.2rem', paddingBottom: 'clamp(1rem, 3vw, 2rem)' }}>
+              <Link href="/" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.85rem)', color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.2s' }}>
                 ← Voltar para a Home
               </Link>
             </div>

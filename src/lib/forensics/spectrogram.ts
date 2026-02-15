@@ -5,12 +5,18 @@ export interface SpectrogramResult {
     error?: string;
 }
 
+interface ExtendedWindow extends Window {
+    webkitAudioContext: typeof AudioContext;
+    webkitOfflineAudioContext: typeof OfflineAudioContext;
+}
+
 export async function generateSpectrogram(file: File): Promise<SpectrogramResult> {
     try {
         if (typeof window === 'undefined') throw new Error('Environment requires browser');
 
         const arrayBuffer = await file.arrayBuffer();
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const win = window as unknown as ExtendedWindow;
+        const audioCtx = new (window.AudioContext || win.webkitAudioContext)();
 
         // Decode audio
         const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
@@ -20,7 +26,7 @@ export async function generateSpectrogram(file: File): Promise<SpectrogramResult
         if (duration > 600) throw new Error('Arquivo muito longo (máx 10min).');
 
         // Setup Offline Context
-        const offlineCtx = new (window.OfflineAudioContext || (window as any).webkitOfflineAudioContext)(
+        const offlineCtx = new (window.OfflineAudioContext || win.webkitOfflineAudioContext)(
             1, // mono
             audioBuffer.length,
             audioBuffer.sampleRate

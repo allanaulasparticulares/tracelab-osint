@@ -11,7 +11,7 @@ import { analyzePNG, decodePNG, encodePNG } from '@/lib/steganography/png-stego'
 import { extractStrings, type StringsResult } from '@/lib/forensics/strings-extractor';
 import { sliceBitPlanes, type BitPlaneResult } from '@/lib/forensics/bit-plane-slicer';
 import { readHexChunk, type HexChunk } from '@/lib/forensics/hex-viewer';
-import { generateProfileLinks, type SocialPlatform } from '@/lib/osint/social-platforms';
+import { generateProfileLinks, type SocialPlatform, type PlatformCategory } from '@/lib/osint/social-platforms';
 import { generateSpectrogram, type SpectrogramResult } from '@/lib/forensics/spectrogram';
 
 type ToolId =
@@ -23,7 +23,6 @@ type ToolId =
   | 'stego-decode'
   | 'stego-scan'
   | 'strings'
-  | 'bitplane'
   | 'bitplane'
   | 'hex'
   | 'spectrogram'
@@ -95,6 +94,7 @@ export default function LabPage() {
   const [bitPlaneResult, setBitPlaneResult] = useState<BitPlaneResult | null>(null);
   const [spectrogramResult, setSpectrogramResult] = useState<SpectrogramResult | null>(null);
   const [osintResult, setOsintResult] = useState<Array<SocialPlatform & { link: string }> | null>(null);
+  const [osintFilter, setOsintFilter] = useState<PlatformCategory | 'All'>('All');
 
   useEffect(() => {
     if (!file) {
@@ -178,8 +178,10 @@ export default function LabPage() {
       }
 
       if (activeTool === 'ela') {
-        const result = await performELA(file, quality);
+        setProgress(0);
+        const result = await performELA(file, quality, (p) => setProgress(p));
         setElaResult(result);
+        setProgress(100);
       }
 
       if (activeTool === 'stego-encode') {
@@ -209,7 +211,7 @@ export default function LabPage() {
       if (activeTool === 'strings') {
         setProgress(0);
         const result = await extractStrings(file, minLength, {
-          onProgress: (percent) => setProgress(percent),
+          onProgress: (percent: number) => setProgress(percent)
         });
         setStringsResult(result);
         setProgress(100);
@@ -217,8 +219,10 @@ export default function LabPage() {
       }
 
       if (activeTool === 'bitplane') {
-        const result = await sliceBitPlanes(file);
+        setProgress(0);
+        const result = await sliceBitPlanes(file, (p) => setProgress(p));
         setBitPlaneResult(result);
+        setProgress(100);
         if (!result.success) throw new Error(result.error);
       }
 
@@ -451,14 +455,39 @@ export default function LabPage() {
                       <span>{progress}%</span>
                     </div>
                     <div className="w-full h-2 bg-black/30 rounded overflow-hidden">
-                      <div 
-                        className="h-full bg-accent-primary transition-all duration-300" 
+                      <div
+                        className="h-full bg-accent-primary transition-all duration-300"
                         style={{ width: `${progress}%` }}
                       />
                     </div>
                   </div>
                 )}
-                
+                {activeTool === 'hex' && (
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'end' }}>
+                    <div style={{ flex: 1 }}>
+                      <label className="text-sm text-muted mb-2" style={{ display: 'block' }}>Pular para Offset (Hex ou Dec)</label>
+                      <input
+                        type="text"
+                        className="input"
+                        placeholder="Ex: 0x1A0 ou 500"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const val = (e.target as HTMLInputElement).value;
+                            let offset = 0;
+                            if (val.startsWith('0x')) offset = parseInt(val, 16);
+                            else offset = parseInt(val, 10);
+
+                            if (!isNaN(offset)) {
+                              setHexOffset(offset);
+                              runTool();
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
                   <button className="btn btn-primary" onClick={runTool} disabled={busy} style={{ flex: 1 }}>
                     {busy ? 'Processando...' : 'Executar Análise'}
@@ -467,6 +496,15 @@ export default function LabPage() {
                     Limpar
                   </button>
                 </div>
+
+                {busy && progress > 0 && progress < 100 && (
+                  <div className="w-full bg-black/40 rounded-full h-1.5 mt-4 overflow-hidden border border-white/10">
+                    <div
+                      className="bg-accent h-full transition-all duration-300"
+                      style={{ width: `${progress}%`, boxShadow: '0 0 10px var(--accent-primary)' }}
+                    />
+                  </div>
+                )}
 
                 {error && (
                   <div className="p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
@@ -511,20 +549,56 @@ export default function LabPage() {
 
                 {/* OSINT */}
                 {activeTool === 'osint-user' && osintResult && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.75rem' }}>
-                    {osintResult.map(p => (
-                      <a
-                        key={p.name}
-                        href={p.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="card"
-                        style={{ padding: '0.75rem', textDecoration: 'none', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}
-                      >
-                        <span className="font-bold text-sm text-white">{p.name}</span>
-                        <span className="text-xs text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded">{p.category}</span>
-                      </a>
-                    ))}
+                  <div className="space-y-4">
+                    <div className="flex flex-wrap gap-2 mb-4 bg-black/20 p-2 rounded border border-border-primary">
+                      {['All', 'Social', 'Dev', 'Msg', 'Video', 'Game', 'Music', 'Blog', 'Photo', 'Misc'].map(cat => (
+                        <button
+                          key={cat}
+                          onClick={() => setOsintFilter(cat as PlatformCategory | 'All')}
+                          className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase transition-all ${osintFilter === cat ? 'bg-accent text-black shadow-[0_0_10px_rgba(0,229,255,0.5)]' : 'bg-black/40 text-muted hover:text-white'
+                            }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.75rem' }}>
+                      {osintResult
+                        .filter(p => osintFilter === 'All' || p.category === osintFilter)
+                        .map(p => (
+                          <a
+                            key={p.name}
+                            href={p.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="card group"
+                            style={{
+                              padding: '0.75rem',
+                              textDecoration: 'none',
+                              textAlign: 'center',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              gap: '0.5rem',
+                              border: '1px solid var(--border-primary)',
+                              background: 'rgba(30, 41, 59, 0.3)'
+                            }}
+                          >
+                            <span className="font-bold text-sm text-white group-hover:text-accent transition-colors">{p.name}</span>
+                            <span
+                              className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded"
+                              style={{
+                                background: 'rgba(0, 229, 255, 0.1)',
+                                color: 'var(--accent-primary)',
+                                border: '1px solid rgba(0, 229, 255, 0.2)'
+                              }}
+                            >
+                              {p.category}
+                            </span>
+                          </a>
+                        ))}
+                    </div>
                   </div>
                 )}
 
@@ -532,24 +606,32 @@ export default function LabPage() {
                 {activeTool === 'hex' && hexResult && (
                   <div>
                     <div className="flex justify-between items-center mb-4 text-xs font-mono text-accent">
-                      <span>OFFSET: {hexResult.offset.toString(16).toUpperCase()}</span>
+                      <span>OFFSET: {hexResult.offset.toString(16).toUpperCase().padStart(8, '0')}</span>
                       <div className="flex gap-2">
                         <button className="btn btn-secondary py-1 px-3 text-xs" onClick={() => handleHexPage('prev')} disabled={hexOffset === 0}>ANTERIOR</button>
                         <button className="btn btn-secondary py-1 px-3 text-xs" onClick={() => handleHexPage('next')}>PRÓXIMO</button>
                       </div>
                     </div>
-                    <div className="overflow-x-auto bg-black/40 p-2 rounded border border-border-primary">
-                      <table className="hex-table">
-                        <tbody>
-                          {hexResult.hex.map((line, i) => (
-                            <tr key={i}>
-                              <td className="hex-offset">{((hexResult.offset + i * 16).toString(16)).padStart(8, '0').toUpperCase()}</td>
-                              <td className="text-green-400 whitespace-pre font-mono">{line}</td>
-                              <td className="hex-ascii whitespace-pre">{hexResult.ascii[i]}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="hex-container">
+                      {hexResult.hex.map((line, i) => (
+                        <div key={i} className="hex-row">
+                          <span className="hex-offset-col">
+                            {(hexResult.offset + i * 16).toString(16).toUpperCase().padStart(8, '0')}
+                          </span>
+                          <div className="hex-bytes-col">
+                            {line.split(' ').map((byte, j) => byte.trim() && (
+                              <span
+                                key={j}
+                                className={`hex-byte ${byte === '00' ? 'null' : (parseInt(byte, 16) >= 32 && parseInt(byte, 16) <= 126) ? 'printable' : ''}`}
+                                title={`Dec: ${parseInt(byte, 16)}`}
+                              >
+                                {byte}
+                              </span>
+                            ))}
+                          </div>
+                          <span className="hex-ascii-col whitespace-pre">{hexResult.ascii[i]}</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -569,26 +651,24 @@ export default function LabPage() {
                 {/* Strings */}
                 {activeTool === 'strings' && stringsResult && (
                   <div>
-                    <div className="grid grid-cols-2 gap-4 mb-3">
-                      <div className="p-3 bg-black/30 rounded">
-                        <div className="text-xs text-muted">Total Encontrado</div>
-                        <div className="text-sm font-bold text-accent">{stringsResult.totalFound}</div>
-                      </div>
-                      <div className="p-3 bg-black/30 rounded">
-                        <div className="text-xs text-muted">Exibindo</div>
-                        <div className="text-sm font-bold">{stringsResult.returned}</div>
+                    <div className="flex justify-between items-center mb-2">
+                      <div className="text-sm text-accent">Encontradas: {stringsResult.totalFound}</div>
+                      {stringsResult.truncated && (
+                        <div className="text-[10px] text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded border border-yellow-500/20">
+                          EXIBINDO APENAS {stringsResult.returned} STRINGS
+                        </div>
+                      )}
+                    </div>
+                    <div className="bg-black/30 rounded border border-border-primary overflow-hidden">
+                      <div className="max-h-[500px] overflow-auto p-4 font-mono text-xs">
+                        {stringsResult.matches?.map((match: { value: string; offset: number }, idx: number) => (
+                          <div key={idx} className="flex gap-4 hover:bg-white/5 py-0.5 border-b border-white/5 last:border-0">
+                            <span className="text-muted w-16 select-none">{match.offset.toString(16).toUpperCase().padStart(8, '0')}</span>
+                            <span className="text-green-400 break-all">{match.value}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    {stringsResult.truncated && (
-                      <div className="text-xs text-yellow-400 mb-2 p-2 bg-yellow-500/10 rounded border border-yellow-500/30">
-                        ⚠️ Resultado truncado - mostrando apenas as primeiras {stringsResult.returned} strings
-                      </div>
-                    )}
-                    <pre className="text-xs p-4 bg-black/30 rounded overflow-auto max-h-[500px] whitespace-pre-wrap text-green-400 font-mono">
-                      {stringsResult.matches?.map((match, idx) => (
-                        `[0x${match.offset.toString(16).padStart(8, '0')}] ${match.value}`
-                      )).join('\n')}
-                    </pre>
                   </div>
                 )}
 
