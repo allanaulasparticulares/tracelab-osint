@@ -24,14 +24,15 @@ async function verifySessionSignature(token: string): Promise<boolean> {
       ['verify']
     );
 
-    // Converte a assinatura Base64URL para ArrayBuffer
+    // Converte a assinatura Base64URL para Uint8Array
     const signatureBin = base64UrlToUint8Array(signature);
 
     // Valida se HMAC(data) === signature
+    // Forçamos o cast para evitar o erro de ArrayBufferLike vs ArrayBuffer no TS 5.x+
     return await crypto.subtle.verify(
       'HMAC',
       key,
-      signatureBin,
+      signatureBin as BufferSource,
       encoder.encode(data)
     );
   } catch {
