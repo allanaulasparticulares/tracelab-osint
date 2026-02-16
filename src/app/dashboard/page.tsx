@@ -82,6 +82,9 @@ export default function DashboardPage() {
     { name: 'Steganography Lab', icon: '🧪', href: '/lab', color: '#a855f7', desc: 'Ocultar/extrair mensagens' },
     { name: 'Error Level Analysis', icon: '🔬', href: '/lab', color: '#ff00aa', desc: 'Detectar manipulação' },
     { name: 'Inconsistency Scanner', icon: '📡', href: '/lab', color: '#3b82f6', desc: 'Scanner de anomalias' },
+    { name: 'Deep Hex Inspector', icon: '💾', href: '/lab', color: '#ec4899', desc: 'Análise binária e ASCII' },
+    { name: 'Strings Extractor', icon: '📝', href: '/lab', color: '#10b981', desc: 'Busca de padrões de texto' },
+    { name: 'Social Sherlock', icon: '🕵️', href: '/lab', color: '#f59e0b', desc: 'Rastreio de username OSINT' },
   ];
 
   const challenges = [
