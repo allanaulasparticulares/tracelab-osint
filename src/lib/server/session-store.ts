@@ -8,11 +8,11 @@ export type SessionRecord = {
   expiresAt: string;
 };
 
-// Segredo para assinar o cookie. Usamos a SERVICE_KEY pois ela é segura e estável no backend.
-const SECRET_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'default-insecure-secret-dev-only';
+// Segredo para assinar o cookie. Usamos preferencialmente a SERVICE_KEY.
+const SECRET_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SESSION_SECRET || 'default-insecure-secret-dev-only';
 
 if (SECRET_KEY === 'default-insecure-secret-dev-only' && process.env.NODE_ENV === 'production') {
-  console.warn('⚠️ CRITICAL: Using insecure session secret in production. Please set SUPABASE_SERVICE_ROLE_KEY.');
+  console.error('❌ CRITICAL SECURITY ERROR: No session secret defined in production! Authentication is vulnerable.');
 }
 
 export async function createSession(email: string, ttlSeconds: number): Promise<string> {
