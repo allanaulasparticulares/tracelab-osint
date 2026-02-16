@@ -8,7 +8,7 @@ export default function BottomNav() {
 
     const isActive = (path: string) => pathname === path || (pathname?.startsWith(path) && path !== '/');
 
-    if (pathname === '/login' || pathname === '/anonymous' || pathname === '/' || pathname === '/lab' || pathname?.startsWith('/verify')) return null;
+    if (pathname === '/login' || pathname === '/anonymous' || pathname === '/' || pathname?.startsWith('/verify')) return null;
 
     const navItems = [
         {
@@ -61,11 +61,17 @@ export default function BottomNav() {
             borderTop: '1px solid var(--border-primary)',
             boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.3)'
         }}>
-            <div className="flex justify-around items-center" style={{ height: '64px', paddingBottom: 'env(safe-area-inset-bottom, 0)' }}>
+            <div className="flex justify-around items-center" style={{ minHeight: '64px', height: 'auto', paddingTop: '0.5rem', paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0.75rem))' }}>
                 {navItems.map((item) => (
                     <Link
                         key={item.href}
                         href={item.href}
+                        onClick={() => {
+                            if (item.href === '/api/auth/logout') {
+                                window.localStorage.removeItem('tracelab_user_name');
+                                window.localStorage.removeItem('tracelab_user_email');
+                            }
+                        }}
                         className={`flex flex-col items-center justify-center w-full h-full transition-all ${isActive(item.href) && item.href !== '/api/auth/logout'
                             ? ''
                             : item.className || ''

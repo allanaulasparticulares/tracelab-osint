@@ -4,7 +4,7 @@ import { touchSession } from '@/lib/server/session-store';
 export const runtime = 'nodejs';
 
 const SESSION_COOKIE = 'tracelab_session';
-const SESSION_MAX_AGE_SECONDS = 60 * 60; // 1 hora
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 dias
 
 export async function POST(req: NextRequest) {
   const session = req.cookies.get(SESSION_COOKIE)?.value;

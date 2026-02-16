@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,7 +18,12 @@ export default function LoginPage() {
   useEffect(() => {
     setHydrated(true);
     setPasskeySupported(!!window.PublicKeyCredential && !!navigator.credentials);
-  }, []);
+
+    // Se estiver logado, vai direto pro dashboard
+    if (document.cookie.includes('tracelab_session')) {
+      router.replace('/dashboard');
+    }
+  }, [router]);
 
   const registerPasskey = async () => {
     resetMessages();
@@ -255,9 +262,19 @@ export default function LoginPage() {
             </div>
 
             <div style={{ textAlign: 'center', marginTop: '1.2rem', paddingBottom: 'clamp(1rem, 3vw, 2rem)' }}>
-              <Link href="/" style={{ fontSize: 'clamp(0.75rem, 2vw, 0.85rem)', color: 'var(--text-muted)', textDecoration: 'none', transition: 'color 0.2s' }}>
-                ← Voltar para a Home
-              </Link>
+              <button
+                onClick={() => router.back()}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: 'clamp(0.75rem, 2vw, 0.85rem)',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  transition: 'color 0.2s'
+                }}
+              >
+                ← Voltar
+              </button>
             </div>
           </div>
         </div>

@@ -12,8 +12,22 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: 'TraceLab OSINT | Cyberpunk Forensics',
-  description: 'Plataforma OSINT com autenticacao por passkeys e laboratorio forense digital.',
+  title: 'TraceLab OSINT | Workbench',
+  description: 'Plataforma OSINT e Laboratório Forense Digital.',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'TraceLab',
+  },
+  icons: {
+    icon: '/logo_atual.png',
+    apple: '/logo_atual.png',
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-title': 'TraceLab',
+  }
 };
 
 export default function RootLayout({

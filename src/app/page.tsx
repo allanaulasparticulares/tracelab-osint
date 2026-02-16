@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
 
@@ -28,6 +30,15 @@ const modules = [
 ];
 
 export default function HomePage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    // Redireciona para dashboard se ja houver uma sessao ativa
+    if (document.cookie.includes('tracelab_session')) {
+      router.replace('/dashboard');
+    }
+  }, [router]);
+
   return (
     <div className="min-h-screen grid-background" style={{ background: 'var(--bg-primary)' }}>
       <header className="glass border-b border-[var(--border-primary)] sticky top-0 z-50">

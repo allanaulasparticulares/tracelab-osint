@@ -9,6 +9,8 @@ const SESSION_COOKIE = 'tracelab_session';
 function buildLogoutResponse(req: NextRequest): NextResponse {
   const url = new URL('/login', req.url);
   const response = NextResponse.redirect(url);
+
+  // Limpa o cookie de sessão
   response.cookies.set(SESSION_COOKIE, '', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
@@ -16,6 +18,16 @@ function buildLogoutResponse(req: NextRequest): NextResponse {
     path: '/',
     maxAge: 0,
   });
+
+  // Limpa o cookie de nome do usuário
+  response.cookies.set('tracelab_user_name', '', {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 0,
+  });
+
   return response;
 }
 

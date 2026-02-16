@@ -5,7 +5,7 @@ import { createSession } from '@/lib/server/session-store';
 import { upsertUserProfile } from '@/lib/server/user-profile-store';
 
 export const runtime = 'nodejs';
-const SESSION_MAX_AGE_SECONDS = 60 * 60; // 1 hora
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 dias
 
 export async function POST(req: NextRequest) {
   try {

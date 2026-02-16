@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 
+const SESSION_PING_PATH = '/api/auth/session/ping';
 const PROTECTED_PREFIXES = ['/lab', '/dashboard', '/challenges', '/privacy', '/theme'];
 const THROTTLE_MS = 60_000;
 const HEARTBEAT_MS = 5 * 60_000;
@@ -14,18 +15,24 @@ export default function SessionActivity() {
   useEffect(() => {
     if (!pathname || !PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return;
 
-    const ping = () => {
+    const ping = async () => {
       const now = Date.now();
       if (now - lastPingRef.current < THROTTLE_MS) return;
       lastPingRef.current = now;
 
-      fetch('/api/auth/session/ping', {
-        method: 'POST',
-        credentials: 'include',
-        keepalive: true,
-      }).catch(() => {
-        // Falha silenciosa: middleware tratará sessão expirada no próximo request.
-      });
+      try {
+        const res = await fetch(SESSION_PING_PATH, {
+          method: 'POST',
+          credentials: 'include',
+          keepalive: true,
+        });
+
+        if (res.status === 401) {
+          window.location.href = '/login?expired=1';
+        }
+      } catch (err) {
+        // Ignora falhas de rede temporárias
+      }
     };
 
     const onActivity = () => ping();
