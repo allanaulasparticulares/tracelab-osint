@@ -78,18 +78,18 @@ export default function DashboardPage() {
   }, []);
 
   const tools = [
-    { name: 'Metadata Intelligence', icon: '🔍', href: '/lab', color: '#00e5ff', desc: 'Extrair EXIF, GPS e metadados' },
-    { name: 'Integrity Check', icon: '🧬', href: '/lab', color: '#10b981', desc: 'Validação de hash e estrutura' },
-    { name: 'Inconsistency Scanner', icon: '📡', href: '/lab', color: '#3b82f6', desc: 'Sinais de manipulação temporal' },
-    { name: 'Steganography PNG', icon: '🧪', href: '/lab', color: '#a855f7', desc: 'Ocultar/extrair em imagens' },
-    { name: 'Audio Steganography', icon: '🎙️', href: '/lab', color: '#f59e0b', desc: 'Ocultar mensagens em áudio WAV' },
-    { name: 'Stego Analyzer', icon: '🛰️', href: '/lab', color: '#60a5fa', desc: 'Detecção estatística LSB' },
-    { name: 'Error Level Analysis', icon: '🔬', href: '/lab', color: '#ff00aa', desc: 'Análise de compressão/edição' },
-    { name: 'Audio Spectrogram', icon: '🎼', href: '/lab', color: '#22d3ee', desc: 'Análise de frequências sonoras' },
-    { name: 'Bit Plane Slicer', icon: '🍰', href: '/lab', color: '#ec4899', desc: 'Decomposição de bits de imagem' },
-    { name: 'Deep Hex Inspector', icon: '💾', href: '/lab', color: '#ec4899', desc: 'Análise binária e ASCII' },
-    { name: 'Strings Extractor', icon: '📝', href: '/lab', color: '#10b981', desc: 'Busca de padrões de texto' },
-    { name: 'Social Sherlock', icon: '🕵️', href: '/lab', color: '#f59e0b', desc: 'Rastreio de username OSINT' },
+    { name: 'Metadata Intelligence', icon: '🔍', href: '/lab?tool=metadata', color: '#00e5ff', desc: 'Extrair EXIF, GPS e metadados' },
+    { name: 'Integrity Check', icon: '🧬', href: '/lab?tool=integrity', color: '#10b981', desc: 'Validação de hash e estrutura' },
+    { name: 'Inconsistency Scanner', icon: '📡', href: '/lab?tool=inconsistency', color: '#3b82f6', desc: 'Sinais de manipulação temporal' },
+    { name: 'Steganography PNG', icon: '🧪', href: '/lab?tool=stego-encode', color: '#a855f7', desc: 'Ocultar/extrair em imagens' },
+    { name: 'Audio Steganography', icon: '🎙️', href: '/lab?tool=stego-audio-encode', color: '#f59e0b', desc: 'Ocultar mensagens em áudio WAV' },
+    { name: 'Stego Analyzer', icon: '🛰️', href: '/lab?tool=stego-scan', color: '#60a5fa', desc: 'Detecção estatística LSB' },
+    { name: 'Error Level Analysis', icon: '🔬', href: '/lab?tool=ela', color: '#ff00aa', desc: 'Análise de compressão/edição' },
+    { name: 'Audio Spectrogram', icon: '🎼', href: '/lab?tool=spectrogram', color: '#22d3ee', desc: 'Análise de frequências sonoras' },
+    { name: 'Bit Plane Slicer', icon: '🍰', href: '/lab?tool=bitplane', color: '#ec4899', desc: 'Decomposição de bits de imagem' },
+    { name: 'Deep Hex Inspector', icon: '💾', href: '/lab?tool=hex', color: '#ec4899', desc: 'Análise binária e ASCII' },
+    { name: 'Strings Extractor', icon: '📝', href: '/lab?tool=strings', color: '#10b981', desc: 'Busca de padrões de texto' },
+    { name: 'Social Sherlock', icon: '🕵️', href: '/lab?tool=osint-user', color: '#f59e0b', desc: 'Rastreio de username OSINT' },
   ];
 
   const challenges = [
@@ -197,9 +197,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem', marginBottom: '2rem' }}>
           <Link href="/lab" className="glass" style={{
-            padding: '1.5rem',
+            padding: '1.25rem',
             borderRadius: '1.25rem',
             textDecoration: 'none',
             display: 'flex',
@@ -211,17 +211,17 @@ export default function DashboardPage() {
             transition: 'transform 0.2s'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <span style={{ fontSize: '2rem' }}>🧪</span>
+              <span style={{ fontSize: '1.75rem' }}>🧪</span>
               <div>
-                <span style={{ fontWeight: 800, color: '#fff', display: 'block', fontSize: '1.1rem' }}>Laboratório Forense</span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--accent-primary)' }}>Ferramentas de Análise</span>
+                <span style={{ fontWeight: 800, color: '#fff', display: 'block', fontSize: '1rem' }}>Laboratório Forense</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--accent-primary)' }}> workbench v1.0</span>
               </div>
             </div>
-            <span style={{ fontSize: '1.5rem', opacity: 0.5 }}>→</span>
+            <span style={{ fontSize: '1.25rem', opacity: 0.5 }}>→</span>
           </Link>
 
           <Link href="/challenges" className="glass" style={{
-            padding: '1.5rem',
+            padding: '1.25rem',
             borderRadius: '1.25rem',
             textDecoration: 'none',
             display: 'flex',
@@ -233,14 +233,37 @@ export default function DashboardPage() {
             transition: 'transform 0.2s'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <span style={{ fontSize: '2rem' }}>🎯</span>
+              <span style={{ fontSize: '1.75rem' }}>🎯</span>
               <div>
                 <span style={{ fontWeight: 800, color: '#fff', display: 'block', fontSize: '1.1rem' }}>Desafios CTF</span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--accent-secondary)' }}>Treinamento Educacional</span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--accent-secondary)' }}>academia de treinamento</span>
               </div>
             </div>
-            <span style={{ fontSize: '1.5rem', opacity: 0.5 }}>→</span>
+            <span style={{ fontSize: '1.25rem', opacity: 0.5 }}>→</span>
           </Link>
+        </div>
+
+        <div style={{ marginBottom: '2rem' }}>
+          <h3 className="text-sm font-bold text-accent uppercase tracking-widest mb-4">Acesso Rápido</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: '0.75rem' }}>
+            {tools.map(tool => (
+              <Link key={tool.name} href={tool.href} className="glass" style={{
+                padding: '1rem 0.5rem',
+                borderRadius: '1rem',
+                textAlign: 'center',
+                textDecoration: 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '0.5rem',
+                border: '1px solid rgba(255,255,255,0.05)',
+                background: 'rgba(255,255,255,0.02)'
+              }}>
+                <span style={{ fontSize: '1.5rem' }}>{tool.icon}</span>
+                <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-muted)', lineHeight: '1.1' }}>{tool.name.split(' ')[0]}</span>
+              </Link>
+            ))}
+          </div>
         </div>
       </main>
 
