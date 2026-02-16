@@ -341,48 +341,48 @@ export default function ChallengesPage() {
 
     return (
         <div className="min-h-screen grid-background" style={{ background: 'var(--bg-primary)' }}>
-      <header className="glass" style={{ borderBottom: '1px solid var(--border-primary)', position: 'sticky', top: 0, zIndex: 50 }}>
-        <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'clamp(0.75rem, 2vw, 1rem) 1rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.5rem, 2vw, 0.75rem)' }}>
-            <Link href="/" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-              <Image src="/logo_atual.png" alt="TraceLab OSINT" width={80} height={80} className="brand-logo" />
-            </Link>
-            <span className="mono header-title-mobile" style={{ fontSize: 'clamp(1rem, 3vw, 1.25rem)', fontWeight: 700, color: 'var(--accent-primary)', lineHeight: 1.2 }}>Desafios CTF</span>
-          </div>
-          <nav className="mobile-nav">
-            <Link href="/dashboard" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.875rem', transition: 'color 0.2s' }}>Dashboard</Link>
-            <Link href="/lab" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.875rem', transition: 'color 0.2s' }}>Lab</Link>
-            <Link href="/api/auth/logout" style={{ color: '#ff5dc3', textDecoration: 'none', fontSize: '0.875rem', transition: 'color 0.2s' }}>Sair</Link>
-          </nav>
-        </div>
-      </header>
+            <header className="glass" style={{ borderBottom: '1px solid var(--border-primary)', position: 'sticky', top: 0, zIndex: 50 }}>
+                <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'clamp(0.75rem, 2vw, 1rem) 1rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(0.5rem, 2vw, 0.75rem)' }}>
+                        <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+                            <Image src="/logo_atual.png" alt="TraceLab OSINT" width={80} height={80} className="brand-logo" />
+                        </Link>
+                        <span className="mono header-title-mobile" style={{ fontSize: 'clamp(1rem, 3vw, 1.25rem)', fontWeight: 700, color: 'var(--accent-primary)', lineHeight: 1.2 }}>Desafios CTF</span>
+                    </div>
+                    <nav className="mobile-nav">
+                        <Link href="/dashboard" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.875rem', transition: 'color 0.2s' }}>Dashboard</Link>
+                        <Link href="/lab" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '0.875rem', transition: 'color 0.2s' }}>Lab</Link>
+                        <Link href="/api/auth/logout" style={{ color: '#ff5dc3', textDecoration: 'none', fontSize: '0.875rem', transition: 'color 0.2s' }}>Sair</Link>
+                    </nav>
+                </div>
+            </header>
 
-      <main className="container" style={{ padding: 'clamp(1.25rem, 3vw, 2rem) 1rem', paddingBottom: 'calc(64px + 1.5rem + env(safe-area-inset-bottom, 0))' }}>
-        {/* Hero */}
-        <div style={{ textAlign: 'center', marginBottom: 'clamp(1.5rem, 3vw, 2rem)' }}>
-          <h1 style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem', lineHeight: 1.2 }}>🎯 Capture The Flag</h1>
-          <p style={{ color: 'var(--text-secondary)', maxWidth: '600px', margin: '0 auto', fontSize: 'clamp(0.85rem, 2vw, 1rem)', lineHeight: 1.5 }}>
-            Resolva desafios práticos de análise forense digital. Cada desafio testa habilidades diferentes de OSINT.
-          </p>
-        </div>
+            <main className="container" style={{ padding: 'clamp(1.25rem, 3vw, 2rem) 1rem', paddingBottom: 'calc(64px + 1.5rem + env(safe-area-inset-bottom, 0))' }}>
+                {/* Hero */}
+                <div style={{ textAlign: 'center', marginBottom: 'clamp(1.5rem, 3vw, 2rem)' }}>
+                    <h1 style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem', lineHeight: 1.2 }}>🎯 Capture The Flag</h1>
+                    <p style={{ color: 'var(--text-secondary)', maxWidth: '600px', margin: '0 auto', fontSize: 'clamp(0.85rem, 2vw, 1rem)', lineHeight: 1.5 }}>
+                        Resolva desafios práticos de análise forense digital. Cada desafio testa habilidades diferentes de OSINT.
+                    </p>
+                </div>
 
-        {/* Score Overview */}
-        <div className="glass" style={{ borderRadius: '0.75rem', padding: 'clamp(1.1rem, 3vw, 1.5rem)', marginBottom: 'clamp(1.5rem, 3vw, 2rem)', display: 'flex', alignItems: 'center', justifyContent: 'space-around', flexWrap: 'wrap', gap: 'clamp(0.75rem, 2vw, 1rem)' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div className="mono" style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 700, color: '#00ff88', lineHeight: 1.1 }}>{earnedPoints}</div>
-            <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.75rem)', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Pontos Ganhos</div>
-          </div>
-          <div style={{ width: '1px', height: 'clamp(30px, 8vw, 40px)', background: 'var(--border-primary)', display: 'none' }} className="md:block" />
-          <div style={{ textAlign: 'center' }}>
-            <div className="mono" style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 700, color: 'var(--text-secondary)', lineHeight: 1.1 }}>{totalPoints}</div>
-            <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.75rem)', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Total Disponível</div>
-          </div>
-          <div style={{ width: '1px', height: 'clamp(30px, 8vw, 40px)', background: 'var(--border-primary)', display: 'none' }} className="md:block" />
-          <div style={{ textAlign: 'center' }}>
-            <div className="mono" style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 700, color: '#00d4ff', lineHeight: 1.1 }}>{enhancedChallenges.filter(c => c.completed).length}/{enhancedChallenges.length}</div>
-            <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.75rem)', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Completados</div>
-          </div>
-        </div>
+                {/* Score Overview */}
+                <div className="glass" style={{ borderRadius: '0.75rem', padding: 'clamp(1.1rem, 3vw, 1.5rem)', marginBottom: 'clamp(1.5rem, 3vw, 2rem)', display: 'flex', alignItems: 'center', justifyContent: 'space-around', flexWrap: 'wrap', gap: 'clamp(0.75rem, 2vw, 1rem)' }}>
+                    <div style={{ textAlign: 'center' }}>
+                        <div className="mono" style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 700, color: '#00ff88', lineHeight: 1.1 }}>{earnedPoints}</div>
+                        <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.75rem)', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Pontos Ganhos</div>
+                    </div>
+                    <div style={{ width: '1px', height: 'clamp(30px, 8vw, 40px)', background: 'var(--border-primary)', display: 'none' }} className="md:block" />
+                    <div style={{ textAlign: 'center' }}>
+                        <div className="mono" style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 700, color: 'var(--text-secondary)', lineHeight: 1.1 }}>{totalPoints}</div>
+                        <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.75rem)', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Total Disponível</div>
+                    </div>
+                    <div style={{ width: '1px', height: 'clamp(30px, 8vw, 40px)', background: 'var(--border-primary)', display: 'none' }} className="md:block" />
+                    <div style={{ textAlign: 'center' }}>
+                        <div className="mono" style={{ fontSize: 'clamp(1.5rem, 5vw, 2rem)', fontWeight: 700, color: '#00d4ff', lineHeight: 1.1 }}>{enhancedChallenges.filter(c => c.completed).length}/{enhancedChallenges.length}</div>
+                        <div style={{ fontSize: 'clamp(0.7rem, 1.8vw, 0.75rem)', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Completados</div>
+                    </div>
+                </div>
 
                 {/* Category Filter */}
                 <div className="scroll-x-container" style={{ marginBottom: '1.5rem' }}>

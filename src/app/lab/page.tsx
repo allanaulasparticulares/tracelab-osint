@@ -281,12 +281,12 @@ export default function LabPage() {
           <button className="menu-toggle" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
             ☰
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}>
             <Image src="/logo_atual.png" alt="Logo" width={32} height={32} />
             <span className="mono" style={{ fontWeight: 700, color: 'var(--accent-primary)' }}>TraceLab</span>
-          </div>
+          </Link>
         </div>
-        <Link href="/dashboard" className="text-sm text-muted" style={{ textDecoration: 'none' }}>Sair</Link>
+        <Link href="/dashboard" className="text-sm text-muted" style={{ textDecoration: 'none' }}>Voltar</Link>
       </header>
 
       {/* Sidebar */}
